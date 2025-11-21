@@ -1,0 +1,9 @@
+## Azure-Kinect-Sensor-SDK
+[submodule "libs/Azure-Kinect-Sensor-SDK"]
+    path = libs/Azure-Kinect-Sensor-SDK
+    url = https://github.com/microsoft/Azure-Kinect-Sensor-SDK.git
+
+## Azure_Kinect_ROS2_Driver
+[submodule "src/Azure_Kinect_ROS2_Driver"]
+    path = src/Azure_Kinect_ROS2_Driver
+    url = https://github.com/ckennedy2050/Azure_Kinect_ROS2_Driver.git

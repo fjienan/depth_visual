@@ -1,0 +1,5 @@
+**libs/
+**build/
+**install/
+**log/
+rosbag**/
