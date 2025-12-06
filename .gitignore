@@ -3,7 +3,7 @@
 **install/
 **log/
 data_base**/
-yolo**
+yolo**/
 detest**/
 rosbag**/
 .vscode/
