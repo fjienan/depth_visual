@@ -2,5 +2,8 @@
 **build/
 **install/
 **log/
+data_base**/
+yolo**
+detest**/
 rosbag**/
 .vscode/
