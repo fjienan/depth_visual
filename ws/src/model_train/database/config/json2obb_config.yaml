@@ -1,0 +1,51 @@
+# JSON to YOLO-OBB 转换配置
+# 用于 json2txt.py 脚本
+
+# ==================== 输入输出配置 ====================
+io:
+  # 输入目录（包含 LabelMe JSON 和图片的混合目录）
+  input_dir: "../KFS-1"
+  
+  # 输出目录（默认: <input_dir>_yolo_obb）
+  # 留空表示使用默认命名
+  output_dir: null
+
+# ==================== 处理选项 ====================
+processing:
+  # 是否移动文件而不是复制（会清空输入目录）
+  move: false
+  
+  # 是否包含没有标注的图片
+  # true: 复制无标注图片并生成空 txt
+  # false: 忽略无标注图片
+  include_unlabeled: true
+  
+  # 严格模式
+  # true: 遇到错误立即停止
+  # false: 跳过有问题的文件，继续处理
+  strict: false
+
+# ==================== 类别映射 ====================
+# 如果 JSON 中的 label 是字符串，可以在这里定义映射关系
+# 如果不定义，会自动生成数字 ID
+class_mapping: {}
+  # 示例：
+  # plate: 0
+  # person: 1
+
+# ==================== 注意事项 ====================
+# 1. 输入目录应包含：
+#    - *.json (LabelMe 标注文件)
+#    - *.jpg/*.png (对应图片)
+#
+# 2. 输出目录结构：
+#    output/
+#      ├── images/  (所有图片)
+#      └── labels/  (对应的 YOLO-OBB txt 标签)
+#
+# 3. YOLO-OBB 格式：
+#    class x1 y1 x2 y2 x3 y3 x4 y4 (归一化 0-1)
+#
+# 4. 支持的 LabelMe 形状：
+#    - polygon: 4点多边形（或更多点会自动拟合）
+#    - rectangle: 2点矩形（会转换为4点）

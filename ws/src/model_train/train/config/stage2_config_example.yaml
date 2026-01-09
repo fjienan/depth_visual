@@ -1,0 +1,111 @@
+# Stage 2: Pose 模型训练配置
+# 用于训练 YOLOv8-Pose 模型进行精细角点检测
+
+# ==================== 模型配置 ====================
+model:
+  # Pose 模型路径或名称
+  # 可以是: yolov8n-pose.pt, yolov8s-pose.pt, yolov8m-pose.pt 等
+  path: "yolo11n-pose.pt"
+  pretrained: true
+
+# ==================== 数据配置 ====================
+data:
+  # Stage 2 数据配置文件路径
+  # 注意: 这个数据应该是由 prepare_stage2_data.py 生成的
+  config: "./data_2.yaml"
+  
+  # 输入图像尺寸（通常比Stage 1小，因为已经裁剪过了）
+  imgsz: 256
+  
+  # 批次大小
+  batch: 64
+  
+  # 工作进程数
+  workers: 8
+
+  # ==================== 数据增强（加强以防止过拟合）====================
+  augmentation:
+    # HSV 增强
+    hsv_h: 0.015
+    hsv_s: 0.7
+    hsv_v: 0.4
+    
+    # 几何变换（适当增强）
+    degrees: 10.0      # 增加旋转角度
+    translate: 0.1     # 增加平移
+    scale: 0.5         # 增加缩放范围
+    shear: 0.0
+    perspective: 0.0   # 关闭透视，避免关键点扭曲
+    flipud: 0.0
+    fliplr: 0.5
+    
+    # 其他增强（增强 mosaic 和 mixup）
+    mosaic: 1.0        # 增加到 1.0，更多样本混合
+    mixup: 0.1         # 启用 mixup（10%概率）
+    copy_paste: 0.0
+    
+    # Dropout 和其他正则化
+    dropout: 0.0       # Pose 模型通常不需要 dropout
+
+
+# ==================== 训练参数（针对过拟合优化）====================
+training:
+  # 训练轮数（依赖早停，不用太多）
+  epochs: 300
+  
+  # 优化器
+  optimizer: SGD
+  
+  # 学习率（降低以提高稳定性）
+  lr0: 0.005         # 从 0.01 降到 0.005
+  lrf: 0.01
+  
+  # 动量
+  momentum: 0.937
+  
+  # 权重衰减（增强正则化）
+  weight_decay: 0.005  # 从 0.0005 增加到 0.002（4倍）
+  
+  # 预热
+  warmup_epochs: 3.0
+  warmup_momentum: 0.8
+  warmup_bias_lr: 0.1
+  
+  # 早停（更敏感）
+  patience: 30         # 从 50 降到 30
+  
+  # Label smoothing（可选，进一步防止过拟合）
+  label_smoothing: 0.0  # 可以尝试 0.05-0.1
+
+
+# ==================== Stage 2 数据准备参数（增加数据多样性）====================
+# 这些参数用于完整流程时的数据准备
+stage2_data:
+  crop_size: [256, 256]      # 裁剪尺寸 (width, height)
+  num_variations: 15         # 从 10 增加到 15，生成更多样本
+  center_jitter: 0.08        # 从 0.05 增加到 0.08，更多中心抖动
+  size_scale_range: [1.05, 1.35]  # 从 [1.1, 1.3] 扩大到 [1.05, 1.35]
+  angle_jitter: 8.0          # 从 5.0 增加到 8.0，更多角度变化
+
+# ==================== 损失函数配置 ====================
+loss:
+  box: 0.5
+  cls: 0.5
+  pose: 25.0  # Pose模型的关键点损失权重
+  dfl: 1.5
+  kobj: 2.0
+
+# ==================== 输出配置 ====================
+output:
+  project: "../../output"
+  name: "stage2_pose"
+  exist_ok: true
+
+# ==================== 设备配置 ====================
+device:
+  device: "0"  # GPU设备，或 "cpu"
+
+# ==================== 其他配置 ====================
+misc:
+  seed: 42
+  verbose: true

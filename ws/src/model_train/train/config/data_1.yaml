@@ -1,0 +1,19 @@
+# 1. 数据集根目录 (Root Path)
+# 它可以是绝对路径，也可以是相对于运行目录的相对路径
+path: ../../database/KFS-1_yolo_obb_augmented_split
+# 2. 数据划分 (Data Split)
+# 这里定义了训练集、验证集和测试集的图像路径
+# 数学视角：这是在定义样本空间 S = Train U Val U Test
+train: images/train  # 训练图片
+val: images/val      # 验证图片
+test: images/test    # (可选) 测试图片
+
+# 3. 类别数量 (Number of Classes)
+# 这是一个标量，定义了分类空间的维度
+nc: 1
+
+# 4. 类别名称 (Class Names)
+# 这是一个从整数索引集合 Z 到 语义字符串集合 S 的映射 (Mapping)
+# Index 0 -> 'plane', Index 1 -> 'ship'
+names:
+  0: 0

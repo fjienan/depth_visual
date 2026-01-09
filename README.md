@@ -1,43 +1,152 @@
-# Depth RGB Detection Project
+# Depth Visual Detection Project
 
 ## 项目简介
-本项目是一个基于Azure Kinect深度相机的RGB+深度图像检测系统，使用YOLOv11进行目标检测和深度信息可视化。项目结合了ROS2框架、Azure Kinect SDK和深度学习技术，实现了实时的RGB-D图像处理和目标检测功能。
+本项目是一个基于深度学习的视觉检测系统，包含：
+1. **两阶段级联检测器**：YOLOv8-OBB（Stage1 粗定位）+ YOLOv8-Pose（Stage2 精确关键点回归）
+2. **完整的数据处理工具链**：从 LabelMe 标注到训练数据的全流程自动化
+3. **ROS2 集成方案**（可选）：支持 Azure Kinect 深度相机的实时检测
+
+项目特点：
+- ✅ 高精度旋转目标检测（OBB）
+- ✅ 亚像素级别的角点定位（Pose）
+- ✅ 灵活的数据增强工具
+- ✅ 完整的训练和推理流程
+- ✅ 详细的文档和配置管理
 
 ## 项目结构
 ```
-depth-visual/
-├── libs/                              # 第三方库
-│   └── Azure-Kinect-Sensor-SDK/       # Azure Kinect传感器SDK
-├── src/                               # ROS2源码包
-│   ├── Azure_Kinect_ROS2_Driver/      # Azure Kinect ROS2驱动
-│   └── rgb_depth_detect/              # RGB+深度检测包
-│       ├── launch/                    # 启动文件
-│       ├── config/                    # 配置文件
-│       ├── model/                     # 检测模型
-│       ├── rgb_depth_detect/          # Python节点
-│       └── package.xml                # ROS2包描述
-├── build/                             # 构建目录
-├── install/                           # 安装目录
-└── README.md                          # 本文件
+depth_visual/
+├── ws/src/model_train/                      # 模型训练模块 ⭐
+│   ├── train/                               # 训练脚本和配置
+│   │   ├── config/                          # 训练配置文件
+│   │   │   ├── stage1_config_example.yaml   # Stage1 (OBB) 训练配置
+│   │   │   ├── stage2_config_example.yaml   # Stage2 (Pose) 训练配置
+│   │   │   ├── data_1.yaml                  # Stage1 数据集配置
+│   │   │   └── data_2.yaml                  # Stage2 数据集配置
+│   │   ├── docs/                            # 详细文档
+│   │   │   ├── README_OVERVIEW.md           # 系统总览 📚
+│   │   │   ├── README_TRAINING.md           # 训练指南
+│   │   │   ├── README_CASCADE.md            # 级联系统详解
+│   │   │   └── README_STAGE2_DATA.md        # Stage2 数据准备
+│   │   ├── train_lpr.py                     # 主训练脚本
+│   │   ├── inference.py                     # 推理脚本
+│   │   ├── test_cascade.py                  # 测试脚本
+│   │   └── readme.md                        # 快速开始
+│   └── database/                            # 数据预处理工具 ⭐
+│       ├── config/                          # 预处理配置文件
+│       │   ├── json2obb_config.yaml         # JSON转换配置
+│       │   ├── obb_augment_config.yaml      # 数据增强配置
+│       │   ├── stage2_prepare_config.yaml   # Stage2数据配置
+│       │   ├── dataset_split_config.yaml    # 数据集划分配置
+│       │   └── README.md                    # 配置文件说明
+│       ├── json2txt.py                      # LabelMe → YOLO-OBB
+│       ├── augment_obb_data.py              # OBB 数据增强
+│       ├── prepare_stage2_data.py           # Stage2 数据生成
+│       ├── split.dataset.py                 # 数据集划分
+│       └── README.md                        # 工具链说明 📚
+├── libs/                                    # 第三方库
+│   ├── ultralytics/                         # Ultralytics (子模块)
+│   └── Azure-Kinect-Sensor-SDK/             # Azure Kinect SDK (可选)
+├── src/                                     # ROS2 源码包 (可选)
+│   ├── Azure_Kinect_ROS2_Driver/            # Azure Kinect ROS2驱动
+│   └── rgb_depth_detect/                    # RGB+深度检测包
+├── .gitignore                               # Git 忽略配置
+└── README.md                                # 本文件
 ```
 
 ## 系统要求
-- Ubuntu 20.04 或 22.04
+
+### 核心环境（必需）
+- **操作系统**: Ubuntu 20.04 / 22.04 或 Windows 10/11
+- **Python**: 3.8+
+- **CUDA**: 11.7+ (推荐用于 GPU 加速)
+- **磁盘空间**: 至少 10GB（用于数据集和模型）
+
+### 可选环境（ROS2 集成）
 - ROS2 Humble 或 Foxy
-- Python 3.8+
-- Azure Kinect DK
-- CUDA支持（可选，用于GPU加速）
+- Azure Kinect DK 硬件
+- Azure Kinect SDK
 
-## 安装教程
+## 🚀 快速开始
 
-### 1. 克隆项目
+### 方式1: 模型训练和推理（核心功能）
+
+#### Step 1: 克隆项目
 ```bash
 # 克隆主仓库
 git clone https://github.com/your-username/depth-visual.git
-cd depth-visual
+cd depth_visual
 
-# 递归克隆所有子模块
-git submodule update --init --recursive
+# 递归克隆 Ultralytics 子模块
+git submodule update --init --recursive libs/ultralytics
+```
+
+#### Step 2: 安装依赖
+```bash
+# 安装 Python 依赖
+pip install -r requirements.txt
+
+# 或手动安装核心依赖
+pip install ultralytics opencv-python numpy pyyaml
+```
+
+#### Step 3: 准备数据
+```bash
+cd ws/src/model_train/database
+
+# 1. 转换 LabelMe 标注为 YOLO-OBB 格式
+python json2txt.py --source your_labelme_folder
+
+# 2. (可选) 数据增强
+python augment_obb_data.py --source your_labelme_folder_yolo_obb --num-augments 5
+
+# 3. 划分数据集
+python split.dataset.py --source your_labelme_folder_yolo_obb_augmented
+```
+
+#### Step 4: 训练模型
+```bash
+cd ../train
+
+# 训练 Stage1 (OBB 检测)
+python train_lpr.py --stage 1 --config config/stage1_config_example.yaml
+
+# 准备 Stage2 数据
+python train_lpr.py --prepare-stage2
+
+# 训练 Stage2 (关键点回归)
+python train_lpr.py --stage 2 --config config/stage2_config_example.yaml
+```
+
+#### Step 5: 推理测试
+```bash
+# 单张图片推理
+python inference.py \
+    --stage1-model runs/obb/train/weights/best.pt \
+    --stage2-model runs/pose/train2/weights/best.pt \
+    --source test_image.jpg
+
+# 批量推理
+python inference.py \
+    --stage1-model runs/obb/train/weights/best.pt \
+    --stage2-model runs/pose/train2/weights/best.pt \
+    --source test_folder/ \
+    --save
+```
+
+**详细教程**: 查看 `ws/src/model_train/train/readme.md` 📚
+
+---
+
+### 方式2: ROS2 集成（可选）
+
+如果需要集成 Azure Kinect 和 ROS2 进行实时检测：
+
+#### Step 1: 克隆完整项目
+```bash
+# 克隆主仓库和所有子模块
+git clone --recursive https://github.com/your-username/depth-visual.git
+cd depth_visual
 ```
 
 **注意事项：**
@@ -53,9 +162,9 @@ git submodule update --init --recursive
   git clone https://github.com/ckennedy2050/Azure_Kinect_ROS2_Driver.git
   ```
 
-### 2. 安装依赖
+#### Step 2: 安装依赖
 
-#### 2.1 安装ROS2依赖
+##### 2.1 安装ROS2依赖
 ```bash
 # 更新包列表
 sudo apt update
@@ -68,7 +177,7 @@ sudo apt install -y ros-$ROS_DISTRO-cv-bridge
 sudo apt install -y ros-$ROS_DISTRO-std-srvs
 ```
 
-#### 2.2 安装Azure Kinect SDK
+##### 2.2 安装Azure Kinect SDK
 ```bash
 # 进入SDK目录
 cd libs/Azure-Kinect-Sensor-SDK

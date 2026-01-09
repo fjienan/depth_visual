@@ -1,0 +1,3 @@
+ros__parameters:
+  image_topic: "/camera/color/image_raw"
+  save_dir: "/home/user/snapshots"

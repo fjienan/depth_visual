@@ -1,0 +1,89 @@
+# OBB 数据增强配置
+# 用于 augment_obb_data.py 脚本
+
+# ==================== 输入输出配置 ====================
+io:
+  # 源数据集目录（YOLO-OBB 格式）
+  source_dir: "../KFS-1_yolo_obb"
+  
+  # 输出目录（默认: <source_dir>_augmented）
+  # 留空表示使用默认命名
+  output_dir: null
+  
+  # 是否复制原始图片到输出
+  copy_original: true
+
+# ==================== 增强数量 ====================
+augmentation:
+  # 每张图片生成的增强版本数
+  num_augments: 5
+  
+  # 随机种子（保证可重复性）
+  seed: 42
+
+# ==================== 几何变换 ====================
+geometric:
+  # 旋转角度范围（度）
+  rotation_min: -15.0
+  rotation_max: 15.0
+  
+  # 缩放因子范围
+  scale_min: 0.8
+  scale_max: 1.2
+  
+  # 平移比例（相对图像尺寸）
+  translate_ratio: 0.0
+  
+  # 透视变换强度（0 = 禁用）
+  perspective_ratio: 0.0
+  
+  # 水平翻转概率
+  flip_horizontal: 0.0
+  
+  # 垂直翻转概率
+  flip_vertical: 0.0
+
+# ==================== 光度变换 ====================
+photometric:
+  # HSV 色调增强强度
+  hsv_h: 0.0
+  
+  # HSV 饱和度增强强度
+  hsv_s: 0.7
+  
+  # HSV 明度增强强度
+  hsv_v: 0.0
+  
+  # 亮度倍数范围
+  brightness_min: 1.0
+  brightness_max: 1.0
+  
+  # 对比度倍数范围
+  contrast_min: 1.0
+  contrast_max: 1.0
+
+# ==================== 质量控制 ====================
+quality:
+  # 边界容差（允许点超出图像边界的比例）
+  margin: 0.1
+
+# ==================== 使用场景建议 ====================
+# 场景1: 保守增强（适合数据量较多）
+# num_augments: 3
+# rotation: [-10, 10]
+# scale: [0.95, 1.05]
+# flip_horizontal: 1.0
+#
+# 场景2: 激进增强（适合数据量很少）
+# num_augments: 10
+# rotation: [-30, 30]
+# scale: [0.7, 1.3]
+# flip_horizontal: 0.5
+# flip_vertical: 0.2
+#
+# 场景3: 只做光度增强（几何多样性已足够）
+# num_augments: 5
+# rotation: [0, 0]
+# scale: [1.0, 1.0]
+# hsv_s: 0.9
+# brightness: [0.6, 1.4]

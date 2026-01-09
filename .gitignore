@@ -1,9 +1,9 @@
-**libs/librealsense/
 **build/
 **install/
 **log/
-data_base**/
+**/database/*/
+!**/database/config/
 yolo**/
-detest**/
 rosbag**/
 .vscode/
+**yolo**

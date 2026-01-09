@@ -1,5 +1,5 @@
 ## Azure-Kinect-Sensor-SDK
-[submodule "libs/Azure-Kinec  t-Sensor-SDK"]
+[submodule "libs/Azure-Kinect-Sensor-SDK"]
     path = libs/Azure-Kinect-Sensor-SDK
     url = https://github.com/fjienan/Azure-Kinect-Sensor-SDK.git
 
