@@ -13,9 +13,6 @@ LPR (License Plate Recognition) 两阶段训练脚本
     
     # 训练 Stage 2 (Pose)
     python train_lpr.py --stage 2 --config stage2_config.yaml
-    
-    # 完整流程（先训练Stage 1，再准备数据，最后训练Stage 2）
-    python train_lpr.py --full-pipeline --stage1-config stage1_config.yaml --stage2-config stage2_config.yaml
 """
 
 import argparse
@@ -23,7 +20,7 @@ import yaml
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 
 try:
     from ultralytics import YOLO
@@ -45,7 +42,82 @@ def load_config(config_path: str) -> Dict[str, Any]:
     return config
 
 
-def merge_configs(config: Dict[str, Any], args: argparse.Namespace) -> Dict[str, Any]:
+def _slugify(s: str) -> str:
+    s = str(s).strip()
+    # Keep it filesystem-friendly (ASCII-ish), but avoid heavy dependencies.
+    out = []
+    for ch in s:
+        if ch.isalnum() or ch in ("-", "_", "."):
+            out.append(ch)
+        elif ch in (" ", "/", "\\", ":", "|"):
+            out.append("_")
+        else:
+            # drop other punctuation
+            out.append("_")
+    # collapse repeats
+    res = "".join(out)
+    while "__" in res:
+        res = res.replace("__", "_")
+    return res.strip("_")
+
+
+def _resolve_path_maybe_relative(path_str: str, base_dir: Path) -> Path:
+    p = Path(str(path_str)).expanduser()
+    if p.is_absolute():
+        return p
+    return (base_dir / p).resolve()
+
+
+def _count_images_in_dir(d: Path) -> int:
+    if not d.exists() or not d.is_dir():
+        return 0
+    exts = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
+    n = 0
+    for p in d.rglob("*"):
+        if p.is_file() and p.suffix.lower() in exts:
+            n += 1
+    return n
+
+
+def _infer_dataset_name_and_size_from_data_yaml(data_yaml_path: Path) -> Tuple[str, Optional[int]]:
+    """Infer dataset folder name and total image count from an Ultralytics data yaml."""
+    try:
+        data_cfg = yaml.safe_load(data_yaml_path.read_text(encoding="utf-8"))
+    except Exception:
+        return "dataset", None
+
+    # Dataset root
+    root = None
+    if isinstance(data_cfg, dict) and data_cfg.get("path"):
+        root = _resolve_path_maybe_relative(str(data_cfg["path"]), data_yaml_path.parent)
+    else:
+        root = data_yaml_path.parent
+
+    dataset_name = _slugify(root.name) if root else "dataset"
+
+    if not isinstance(data_cfg, dict):
+        return dataset_name, None
+
+    total = 0
+    any_split = False
+    for key in ("train", "val", "test"):
+        v = data_cfg.get(key)
+        if not v:
+            continue
+        any_split = True
+        # train/val/test can be a str or list in some Ultralytics configs
+        if isinstance(v, (list, tuple)):
+            paths = [str(x) for x in v]
+        else:
+            paths = [str(v)]
+        for rel in paths:
+            p = _resolve_path_maybe_relative(rel, root)
+            total += _count_images_in_dir(p)
+
+    return dataset_name, (total if any_split else None)
+
+
+def merge_configs(config: Dict[str, Any], args: argparse.Namespace, config_path: str) -> Dict[str, Any]:
     """合并配置文件和命令行参数"""
     trainer_args = {}
     
@@ -55,7 +127,11 @@ def merge_configs(config: Dict[str, Any], args: argparse.Namespace) -> Dict[str,
     
     # 数据参数
     if args.data or config.get('data', {}).get('config'):
-        trainer_args['data'] = args.data or config.get('data', {}).get('config')
+        # Resolve data yaml relative to the stage config file directory.
+        stage_cfg_dir = Path(config_path).resolve().parent
+        data_cfg_raw = args.data or config.get('data', {}).get('config')
+        data_cfg_path = _resolve_path_maybe_relative(str(data_cfg_raw), stage_cfg_dir)
+        trainer_args['data'] = str(data_cfg_path)
     
     if args.imgsz or config.get('data', {}).get('imgsz'):
         trainer_args['imgsz'] = args.imgsz or config.get('data', {}).get('imgsz')
@@ -115,8 +191,21 @@ def merge_configs(config: Dict[str, Any], args: argparse.Namespace) -> Dict[str,
     output_config = config.get('output', {})
     if args.project or output_config.get('project'):
         trainer_args['project'] = args.project or output_config.get('project')
-    if args.name or output_config.get('name'):
-        trainer_args['name'] = args.name or output_config.get('name')
+    if args.name:
+        trainer_args['name'] = args.name
+    else:
+        # Auto naming: dataset folder name + dataset size.
+        auto_name = bool(output_config.get("auto_name", False))
+        if auto_name and trainer_args.get("data"):
+            data_yaml_path = Path(str(trainer_args["data"])).resolve()
+            dataset_name, n_imgs = _infer_dataset_name_and_size_from_data_yaml(data_yaml_path)
+            stage_name = str(output_config.get("name") or Path(config_path).stem).strip()
+            stage_name = _slugify(stage_name) or "run"
+            n_str = "unk" if n_imgs is None else str(int(n_imgs))
+            template = str(output_config.get("name_template") or "{stage}__{dataset}_n{n}")
+            trainer_args["name"] = template.format(stage=stage_name, dataset=dataset_name, n=n_str)
+        elif output_config.get('name'):
+            trainer_args['name'] = output_config.get('name')
     if output_config.get('exist_ok') is not None:
         trainer_args['exist_ok'] = output_config.get('exist_ok')
     
@@ -145,7 +234,7 @@ def train_stage1_obb(config_path: str, args: argparse.Namespace):
     
     # 加载配置
     config = load_config(config_path)
-    trainer_args = merge_configs(config, args)
+    trainer_args = merge_configs(config, args, config_path=config_path)
     
     # 检查必需参数
     if 'model' not in trainer_args:
@@ -191,7 +280,7 @@ def train_stage2_pose(config_path: str, args: argparse.Namespace):
     
     # 加载配置
     config = load_config(config_path)
-    trainer_args = merge_configs(config, args)
+    trainer_args = merge_configs(config, args, config_path=config_path)
     
     # 检查必需参数
     if 'model' not in trainer_args:
@@ -229,57 +318,6 @@ def train_stage2_pose(config_path: str, args: argparse.Namespace):
         sys.exit(1)
 
 
-def prepare_stage2_data(source_dir: str, output_dir: str, config: Dict[str, Any]):
-    """准备 Stage 2 训练数据"""
-    print("\n" + "="*60)
-    print("准备 Stage 2 训练数据")
-    print("="*60)
-    
-    # 导入数据准备模块
-    try:
-        from prepare_stage2_data import Stage2DataPreparator
-    except ImportError:
-        print("错误: 无法导入 prepare_stage2_data 模块")
-        print("请确保 prepare_stage2_data.py 在同一目录下")
-        sys.exit(1)
-    
-    # 从配置中获取参数
-    stage2_data_config = config.get('stage2_data', {})
-    crop_size = tuple(stage2_data_config.get('crop_size', [256, 256]))
-    num_variations = stage2_data_config.get('num_variations', 10)
-    center_jitter = stage2_data_config.get('center_jitter', 0.05)
-    size_scale_range = tuple(stage2_data_config.get('size_scale_range', [1.1, 1.3]))
-    angle_jitter = stage2_data_config.get('angle_jitter', 5.0)
-    
-    print(f"源数据目录: {source_dir}")
-    print(f"输出目录: {output_dir}")
-    print(f"裁剪尺寸: {crop_size}")
-    print(f"每个对象的变化数: {num_variations}")
-    print("="*60 + "\n")
-    
-    # 创建数据准备器
-    preparator = Stage2DataPreparator(
-        source_dir=source_dir,
-        output_dir=output_dir,
-        crop_size=crop_size,
-        num_variations=num_variations,
-        center_jitter=center_jitter,
-        size_scale_range=size_scale_range,
-        angle_jitter=angle_jitter
-    )
-    
-    # 执行数据准备
-    try:
-        preparator.run()
-        print(f"\n{colorstr('green', 'bold', '✓')} Stage 2 数据准备完成!")
-        return True
-    except Exception as e:
-        print(f"\n{colorstr('red', 'bold', '✗')} Stage 2 数据准备出错: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(
@@ -292,35 +330,16 @@ def parse_args():
   
   # 训练 Stage 2 (Pose)
   python train_lpr.py --stage 2 --config stage2_config.yaml
-  
-  # 完整流程（自动执行所有步骤）
-  python train_lpr.py --full-pipeline \\
-      --stage1-config stage1_config.yaml \\
-      --stage2-config stage2_config.yaml \\
-      --source-data ./data/original \\
-      --stage2-data ./data/stage2
         """
     )
     
     # 训练阶段选择
     parser.add_argument('--stage', type=int, choices=[1, 2],
                        help='训练阶段: 1=OBB模型, 2=Pose模型')
-    parser.add_argument('--full-pipeline', action='store_true',
-                       help='执行完整流程（Stage 1 -> 数据准备 -> Stage 2）')
     
     # 配置文件
     parser.add_argument('--config', type=str,
                        help='训练配置文件路径（单阶段训练时使用）')
-    parser.add_argument('--stage1-config', type=str,
-                       help='Stage 1 配置文件路径（完整流程时使用）')
-    parser.add_argument('--stage2-config', type=str,
-                       help='Stage 2 配置文件路径（完整流程时使用）')
-    
-    # 数据路径（完整流程时使用）
-    parser.add_argument('--source-data', type=str,
-                       help='原始数据目录（用于准备Stage 2数据）')
-    parser.add_argument('--stage2-data', type=str,
-                       help='Stage 2 数据输出目录')
     
     # 模型参数
     parser.add_argument('--model', type=str, default=None,
@@ -362,48 +381,11 @@ def main():
     args = parse_args()
     
     # 检查参数
-    if not args.full_pipeline and not args.stage:
-        print("错误: 必须指定 --stage 或 --full-pipeline")
+    if not args.stage:
+        print("错误: 必须指定 --stage (1 或 2)")
         sys.exit(1)
-    
-    if args.full_pipeline:
-        # 完整流程
-        if not args.stage1_config or not args.stage2_config:
-            print("错误: 完整流程需要 --stage1-config 和 --stage2-config")
-            sys.exit(1)
-        
-        if not args.source_data or not args.stage2_data:
-            print("错误: 完整流程需要 --source-data 和 --stage2-data")
-            sys.exit(1)
-        
-        print("\n" + "="*60)
-        print("LPR 完整训练流程")
-        print("="*60)
-        print("步骤 1: 训练 Stage 1 (OBB 模型)")
-        print("步骤 2: 准备 Stage 2 数据")
-        print("步骤 3: 训练 Stage 2 (Pose 模型)")
-        print("="*60)
-        
-        # 步骤1: 训练 Stage 1
-        stage1_model_path = train_stage1_obb(args.stage1_config, args)
-        
-        # 步骤2: 准备 Stage 2 数据
-        stage1_config = load_config(args.stage1_config)
-        if not prepare_stage2_data(args.source_data, args.stage2_data, stage1_config):
-            print("错误: Stage 2 数据准备失败")
-            sys.exit(1)
-        
-        # 步骤3: 训练 Stage 2
-        train_stage2_pose(args.stage2_config, args)
-        
-        print("\n" + "="*60)
-        print(f"{colorstr('green', 'bold', '✓')} LPR 完整训练流程完成!")
-        print("="*60)
-        print(f"Stage 1 模型: {stage1_model_path}")
-        print(f"Stage 2 数据: {args.stage2_data}")
-        print("="*60)
-        
-    elif args.stage == 1:
+
+    if args.stage == 1:
         # 只训练 Stage 1
         if not args.config:
             print("错误: Stage 1 训练需要 --config 参数")

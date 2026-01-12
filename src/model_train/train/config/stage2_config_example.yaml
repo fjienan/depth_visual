@@ -99,6 +99,10 @@ loss:
 output:
   project: "../output"
   name: "stage2_pose"
+  # 自动命名：按“数据集文件夹名 + 数据集规模”命名输出目录
+  # 例：stage2_pose__stage2__KFS-1_obb_split_n5400
+  auto_name: true
+  name_template: "{stage}__{dataset}_n{n}"
   exist_ok: true
 
 # ==================== 设备配置 ====================

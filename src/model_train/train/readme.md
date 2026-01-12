@@ -74,10 +74,8 @@ python train_lpr.py --stage 1 --config stage1_config.yaml
 python prepare_stage2_data.py --source ./database/KFS_splits
 python train_lpr.py --stage 2 --config stage2_config.yaml
 
-# 方式2: 一键训练
-python train_lpr.py --full-pipeline \
-    --stage1-config stage1_config.yaml \
-    --stage2-config stage2_config.yaml
+# 说明：train_lpr.py 仅保留“单阶段训练”（--stage 1/2）。
+# Stage2 数据准备请使用 database/prepare_stage2_data.py 等工具链脚本完成。
 ```
 
 ---
@@ -321,11 +319,14 @@ python train_lpr.py --stage 2 --config stage2_config_example.yaml
 
 # 5. 推理测试
 python inference.py \
-    --obb-model output/stage1_obb/weights/best.pt \
-    --pose-model output/stage2_pose/weights/best.pt \
+    --obb-model output/<stage1_run_dir>/weights/best.pt \
+    --pose-model output/<stage2_run_dir>/weights/best.pt \
     --source test.jpg \
     --show
 ```
+
+> 提示：本项目默认支持将输出目录按“数据集文件夹名 + 数据集规模”自动命名（见 `config/stage*_config_example.yaml` 的 `output.auto_name`）。  
+> 因此实际输出目录通常形如：`output/stage1_obb__<dataset>_n1234/`、`output/stage2_pose__<dataset>_n5678/`。
 
 ---
 

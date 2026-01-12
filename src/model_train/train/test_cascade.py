@@ -8,6 +8,7 @@ This script demonstrates how to use the CascadeDetector class.
 
 import cv2
 import numpy as np
+from pathlib import Path
 from inference import CascadeDetector, GeometryUtils
 
 def test_geometry_utils():
@@ -76,10 +77,20 @@ def test_cascade_detector():
     print("Testing CascadeDetector")
     print("=" * 60)
     
-    # Note: This requires actual model files
-    # Replace with your actual model paths
-    obb_model = "/home/fjienan/Desktop/workspace/depth_visual/ws/src/model_train/output/stage1_obb/weights/best.pt"
-    pose_model = "/home/fjienan/Desktop/workspace/depth_visual/ws/src/model_train/output/stage2_pose/weights/best.pt"
+    # Note: This requires actual model files.
+    # We try to find the latest best.pt under ../output/ automatically.
+    repo_model_train_dir = Path(__file__).resolve().parents[1]  # .../src/model_train
+    output_dir = repo_model_train_dir / "output"
+
+    def _latest_best(pattern: str) -> str:
+        cands = list(output_dir.glob(pattern))
+        if not cands:
+            return ""
+        cands.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        return str(cands[0])
+
+    obb_model = _latest_best("stage1_obb*/weights/best.pt")
+    pose_model = _latest_best("stage2_pose*/weights/best.pt")
     
     print(f"\n注意: 需要提供实际的模型路径")
     print(f"  OBB 模型: {obb_model}")

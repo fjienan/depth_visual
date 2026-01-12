@@ -74,6 +74,10 @@ training:
 output:
   project: "../output"
   name: "stage1_obb"
+  # 自动命名：按“数据集文件夹名 + 数据集规模”命名输出目录
+  # 例：stage1_obb__KFS-1_obb_augmented_split_n2130
+  auto_name: true
+  name_template: "{stage}__{dataset}_n{n}"
   exist_ok: true
 
 # ==================== 设备配置 ====================

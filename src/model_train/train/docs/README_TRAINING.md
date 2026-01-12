@@ -55,14 +55,8 @@ python train_lpr.py \
 
 ### 方式2: 完整流程（一键训练）
 
-```bash
-python train_lpr.py \
-    --full-pipeline \
-    --stage1-config stage1_config.yaml \
-    --stage2-config stage2_config.yaml \
-    --source-data ./database/KFS_splits \
-    --stage2-data ./database/stage2_data
-```
+> 说明：该“一键训练（full-pipeline）”功能已从 `train_lpr.py` 移除。  
+> 请按上面的 **方式1: 分步训练（推荐）** 执行（先 Stage1 → 再准备 Stage2 数据 → 再 Stage2）。
 
 ## 配置文件
 
@@ -165,14 +159,8 @@ python train_lpr.py --stage 2 --config stage2_config.yaml
 
 #### 完整流程
 
-```bash
-python train_lpr.py \
-    --full-pipeline \
-    --stage1-config stage1_config.yaml \
-    --stage2-config stage2_config.yaml \
-    --source-data ./database/KFS_splits \
-    --stage2-data ./database/stage2_data
-```
+> 说明：该“一键训练（full-pipeline）”功能已从 `train_lpr.py` 移除。  
+> 请按本文前面的 **方式1: 分步训练（推荐）** 执行完整流程。
 
 #### 常用参数
 
@@ -190,7 +178,7 @@ python train_lpr.py \
 ### Stage 1 输出
 
 ```
-model_train/output/stage1_obb/
+model_train/output/stage1_obb__<dataset>_n1234/
 ├── weights/
 │   ├── best.pt      # 最佳模型
 │   └── last.pt      # 最新模型
@@ -201,7 +189,7 @@ model_train/output/stage1_obb/
 ### Stage 2 输出
 
 ```
-model_train/output/stage2_pose/
+model_train/output/stage2_pose__<dataset>_n5678/
 ├── weights/
 │   ├── best.pt      # 最佳模型
 │   └── last.pt      # 最新模型
@@ -215,8 +203,8 @@ model_train/output/stage2_pose/
 
 ```bash
 python inference.py \
-    --obb-model runs/obb/stage1_obb/weights/best.pt \
-    --pose-model runs/pose/stage2_pose/weights/best.pt \
+    --obb-model output/<stage1_run_dir>/weights/best.pt \
+    --pose-model output/<stage2_run_dir>/weights/best.pt \
     --source test_image.jpg \
     --show
 ```
