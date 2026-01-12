@@ -5,20 +5,20 @@
 model:
   # Pose 模型路径或名称
   # 可以是: yolov8n-pose.pt, yolov8s-pose.pt, yolov8m-pose.pt 等
-  path: "yolo11n-pose.pt"
+  path: "yolo11m-pose.pt"
   pretrained: true
 
 # ==================== 数据配置 ====================
 data:
   # Stage 2 数据配置文件路径
   # 注意: 这个数据应该是由 prepare_stage2_data.py 生成的
-  config: "./data_2.yaml"
+  config: "./config/data_2.yaml"
   
   # 输入图像尺寸（通常比Stage 1小，因为已经裁剪过了）
   imgsz: 256
   
   # 批次大小
-  batch: 64
+  batch: 32
   
   # 工作进程数
   workers: 8
@@ -57,7 +57,7 @@ training:
   optimizer: SGD
   
   # 学习率（降低以提高稳定性）
-  lr0: 0.005         # 从 0.01 降到 0.005
+  lr0: 0.01         # 从 0.01 降到 0.005
   lrf: 0.01
   
   # 动量
@@ -72,7 +72,7 @@ training:
   warmup_bias_lr: 0.1
   
   # 早停（更敏感）
-  patience: 30         # 从 50 降到 30
+  patience: 50         # 从 50 降到 30
   
   # Label smoothing（可选，进一步防止过拟合）
   label_smoothing: 0.0  # 可以尝试 0.05-0.1
@@ -97,7 +97,7 @@ loss:
 
 # ==================== 输出配置 ====================
 output:
-  project: "../../output"
+  project: "../output"
   name: "stage2_pose"
   exist_ok: true
 

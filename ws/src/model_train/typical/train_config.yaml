@@ -1,0 +1,262 @@
+# YOLO Pose 模型训练配置文件
+# 这个文件包含了所有可调节的训练参数
+# 可以通过修改这个文件来调整训练行为，也可以通过命令行参数覆盖
+
+# ==================== 模型配置 ====================
+model:
+  # 模型路径或模型名称
+  # 可以是预训练模型名称: yolov8n-pose, yolov8s-pose, yolov8m-pose, yolov8l-pose, yolov8x-pose
+  # 或者自定义模型路径: /path/to/model.pt
+  path: "yolov8n-pose.pt"  # 或使用完整路径: "/home/jienan/depth-visual/model/yolov8n-pose2/weights/best.pt"
+  
+  # 是否使用预训练权重
+  pretrained: true
+  
+  # 冻结层数（用于迁移学习，0表示不冻结）
+  freeze: 0
+
+# ==================== 数据配置 ====================
+data:
+  # 数据配置文件路径（必需）
+  # 数据配置文件应包含: train, val, test路径，类别数量(nc)，类别名称(names)
+  config: "/home/jienan/depth-visual/data_base/data_2025_12_5_1/data.yaml"
+  
+  # 输入图像尺寸（可以是单个数字或列表 [height, width]）
+  # 常见尺寸: 320, 416, 512, 640, 800, 1024
+  imgsz: 640
+  
+  # 批次大小（根据GPU内存调整）
+  # 小模型(yolov8n): 16-32, 中模型(yolov8s/m): 8-16, 大模型(yolov8l/x): 4-8
+  batch: 16
+  
+  # 验证批次大小（通常与batch相同或更大）
+  val_batch: 16
+  
+  # 工作进程数（用于数据加载，0表示使用主进程）
+  workers: 8
+  
+  # 是否使用矩形训练（可以提高训练速度）
+  rect: false
+  
+  # 是否使用多尺度训练（随机改变图像尺寸）
+  multi_scale: false
+  
+  # 数据集使用比例（0.0-1.0，用于快速测试）
+  fraction: 1.0
+  
+  # 是否使用单类别模式
+  single_cls: false
+  
+  # 数据增强配置
+  augmentation:
+    # 水平翻转概率
+    hsv_h: 0.015  # 色调增强
+    hsv_s: 0.7    # 饱和度增强
+    hsv_v: 0.4    # 明度增强
+    degrees: 0.0  # 旋转角度范围
+    translate: 0.1  # 平移比例
+    scale: 0.5    # 缩放比例
+    shear: 0.0    # 剪切角度
+    perspective: 0.0  # 透视变换
+    flipud: 0.0   # 上下翻转概率
+    fliplr: 0.5   # 左右翻转概率
+    mosaic: 1.0   # Mosaic增强概率
+    mixup: 0.0    # Mixup增强概率
+    copy_paste: 0.0  # Copy-paste增强概率
+
+# ==================== 训练配置 ====================
+training:
+  # 训练轮数
+  epochs: 500
+  
+  # 优化器类型: SGD, Adam, AdamW, RMSProp, NAdam, RAdam
+  optimizer: "SGD"
+  
+  # 初始学习率
+  lr0: 0.01
+  
+  # 最终学习率（lr0 * lrf）
+  lrf: 0.01
+  
+  # 动量（SGD优化器使用）
+  momentum: 0.937
+  
+  # 权重衰减（L2正则化）
+  weight_decay: 0.0005
+  
+  # 预热轮数
+  warmup_epochs: 3.0
+  
+  # 预热初始学习率（warmup_lr = lr0 * warmup_momentum）
+  warmup_momentum: 0.8
+  
+  # 预热偏置学习率
+  warmup_bias_lr: 0.1
+  
+  # 学习率调度器: 注意，Ultralytics YOLO不支持lr_scheduler参数
+  # 学习率调度由lrf参数控制（最终学习率 = lr0 * lrf）
+  # lr_scheduler: "cosine"  # 已禁用：不是有效的YOLO参数
+  
+  # 早停耐心值（验证指标不改善的轮数）
+  patience: 50
+  
+  # 是否保存最佳模型
+  save: true
+  
+  # 保存周期（每N个epoch保存一次）
+  save_period: -1  # -1表示只保存最佳和最后一个模型
+  
+  # 是否保存训练检查点
+  save_json: false
+  
+  # 是否验证每个epoch
+  val: true
+  
+  # 验证周期（每N个epoch验证一次）
+  val_period: 1
+  
+  # 是否在训练时显示验证图像
+  plots: true
+  
+  # 是否使用半精度训练（FP16，可以加速训练并减少显存占用）
+  amp: true
+  
+  # 是否使用确定性训练（可复现性）
+  deterministic: false
+  
+  # 是否使用单GPU训练（False表示使用所有可用GPU）
+  single_cls: false
+  
+  # 是否使用矩形验证
+  rect_val: false
+  
+  # 是否使用DDP（分布式数据并行）
+  ddp: false
+  
+  # 是否使用同步批归一化
+  sync_bn: false
+
+# ==================== 损失函数配置 ====================
+loss:
+  # 边界框损失权重
+  box: 7.5
+  
+  # 类别损失权重
+  cls: 0.5
+  
+  # 关键点损失权重（Pose模型特有）
+  pose: 12.0
+  
+  # DFL损失权重
+  dfl: 1.5
+  
+  # 关键点可见性损失权重
+  kobj: 1.0
+  
+  # 标签平滑（0.0表示不使用）
+  label_smoothing: 0.0
+
+# ==================== 输出配置 ====================
+output:
+  # 项目输出路径
+  project: "/home/jienan/depth-visual/model"
+  
+  # 训练运行名称
+  name: "yolov8n-pose"
+  
+  # 是否覆盖已有输出
+  exist_ok: false
+  
+  # 是否使用增量命名（如果名称已存在）
+  increment_run: false
+  
+  # 是否保存训练日志
+  save_logs: true
+  
+  # 是否保存训练图像
+  save_images: true
+  
+  # 是否保存训练视频
+  save_videos: false
+
+# ==================== 设备配置 ====================
+device:
+  # 设备类型: cpu, 0, 1, 2, ... (0表示第一个GPU)
+  # 可以指定多个GPU: "0,1,2,3"
+  device: "cuda"  # 或 "cpu" 或 "0" 或 "0,1"
+  
+  # 是否使用CUDA基准模式（可以加速训练，但可能降低可复现性）
+  cuda_benchmark: true
+
+# ==================== 其他配置 ====================
+misc:
+  # 随机种子（用于可复现性）
+  seed: 0  # 0表示随机种子
+  
+  # 是否详细输出
+  verbose: true
+  
+  # 是否使用TensorBoard
+  tensorboard: true
+  
+  # 是否使用Weights & Biases
+  wandb: false
+  
+  # 是否使用ClearML
+  clearml: false
+  
+  # 是否使用Comet
+  comet: false
+  
+  # 是否使用MLflow
+  mlflow: false
+  
+  # 是否使用DVC
+  dvc: false
+  
+  # 是否使用Neptune
+  neptune: false
+  
+  # 是否使用Ray Tune
+  ray_tune: false
+  
+  # 是否使用Optuna
+  optuna: false
+  
+  # 是否使用Hyperopt
+  hyperopt: false
+  
+  # 是否使用Prodigy
+  prodigy: false
+  
+  # 是否使用Ultralytics HUB
+  hub: false
+  
+  # 是否使用Resume训练（从检查点继续训练）
+  resume: false
+  
+  # 检查点路径（用于resume）
+  resume_path: ""
+
+# ==================== Pose模型特有配置 ====================
+# 注意: kpt_shape 应该在数据配置文件(data.yaml)中定义，而不是在这里
+# 例如在 data.yaml 中添加: kpt_shape: [17, 3] 或 kpt_shape: [4, 3]
+pose:
+  # 以下参数不是有效的YOLO训练参数，仅供参考
+  # 关键点数量（根据数据集调整，COCO是17个关键点）
+  # kpt_shape: [17, 3]  # 应该在data.yaml中定义，而不是这里
+  
+  # 关键点可见性阈值（仅供参考，实际由模型内部处理）
+  # kpt_visibility_threshold: 0.5
+  
+  # 是否使用关键点标签平滑（仅供参考）
+  # kpt_label_smoothing: false
+  
+  # 关键点损失类型: l1, l2, smooth_l1（仅供参考）
+  # kpt_loss_type: "l1"
+  
+  # 关键点回归损失权重（仅供参考）
+  # kpt_regression_weight: 1.0
+  
+  # 关键点分类损失权重（仅供参考）
+  # kpt_classification_weight: 1.0

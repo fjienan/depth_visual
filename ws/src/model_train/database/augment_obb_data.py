@@ -447,7 +447,7 @@ Examples:
     parser.add_argument('--output', type=str, default=None,
                        help=('Path to output directory for augmented dataset. '
                              'If omitted, uses a sibling directory named <source_dir_name>_augmented.'))
-    parser.add_argument('--num-augments', type=int, default=5,
+    parser.add_argument('--num-augments', type=int, default=3,
                        help='Number of augmented versions per image (default: 5)')
     parser.add_argument('--rotation', type=float, nargs=2, default=[-15, 15],
                        metavar=('MIN', 'MAX'),

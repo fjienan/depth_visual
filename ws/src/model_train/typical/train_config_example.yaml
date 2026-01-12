@@ -1,0 +1,58 @@
+# YOLO Pose 模型训练配置文件示例
+# 这是一个简化版本的配置文件，适合快速开始
+# 复制此文件为 train_config.yaml 并根据需要修改
+
+# ==================== 模型配置 ====================
+model:
+  path: "yolov8s-pose.pt"  # 使用预训练模型
+  pretrained: true
+
+# ==================== 数据配置 ====================
+data:
+  config: "../database/data.yaml"  # 修改为你的数据配置文件路径
+  imgsz: 1280
+  batch: 8
+  workers: 8
+
+# ==================== 训练配置 ====================
+training:
+  epochs: 300
+  optimizer: "AdamW"
+  lr0: 0.001
+  lrf: 0.01
+  momentum: 0.900
+  weight_decay: 0.0005
+  warmup_epochs: 3.0
+  patience: 50
+  amp: true  # 使用半精度训练，加速并节省显存
+
+# ==================== 数据增强 ====================
+  degrees: 0.0      # 关闭旋转增强，或者设小一点，除非你的物体是倒着放的
+  translate: 0.05   # 平移
+  scale: 0.1        # 缩放
+  shear: 0.0        # 剪切
+  perspective: 0.0  # 透视变换。增加这个值 (0.0 -> 0.001) 让模型适应近大远小的几何畸变。
+  flipud: 0.0      # 上下翻转：对于特定方向的文字/车牌，通常关闭
+  fliplr: 0.0      # 左右翻转：同上
+  mosaic: 0.0      # 开启 Mosaic
+  close_mosaic: 50 # 在最后 50 个 epoch 关闭 Mosaic。
+  # 原理：Mosaic 会拼接图片，导致物体边缘截断。对于刚体寻找完整4个点，这在后期是噪声。
+
+# ==================== 损失函数配置 ====================
+loss:
+  box: 0.5
+  cls: 0.5
+  pose: 25.0  # Pose模型的关键点损失权重
+  dfl: 1.5
+  kobj: 2.0
+
+# ==================== 输出配置 ====================
+output:
+  project: "../output"
+  name: "yolov8s-pose"
+  exist_ok: false
+
+# ==================== 设备配置 ====================
+device:
+  device: "cuda"  # 或 "cpu" 或 "0"
+

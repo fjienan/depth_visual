@@ -5,20 +5,20 @@
 model:
   # OBB 模型路径或名称
   # 可以是: yolov8n-obb.pt, yolov8s-obb.pt, yolov8m-obb.pt 等
-  path: "yolov8m-obb.pt"
+  path: "yolov8n-obb.pt"
   pretrained: true
 
 # ==================== 数据配置 ====================
 data:
   # 数据配置文件路径（YAML格式）
   # 应包含: train, val, test路径，类别数量(nc)，类别名称(names)
-  config: "./data_1.yaml"
+  config: "./config/data_1.yaml"
   
   # 输入图像尺寸
   imgsz: 640
   
   # 批次大小
-  batch: 16
+  batch: 32
   
   # 工作进程数
   workers: 8
@@ -31,7 +31,7 @@ data:
     hsv_v: 0.4
     
     # 几何变换
-    degrees: 10.0      # 旋转角度
+    degrees: 5.0      # 旋转角度
     translate: 0.1     # 平移
     scale: 0.5         # 缩放
     shear: 0.0         # 剪切
@@ -72,7 +72,7 @@ training:
 
 # ==================== 输出配置 ====================
 output:
-  project: "../../output"
+  project: "../output"
   name: "stage1_obb"
   exist_ok: true
 

@@ -530,7 +530,7 @@ Examples:
     parser.add_argument('--crop-size', type=int, nargs=2, default=[256, 256],
                        metavar=('WIDTH', 'HEIGHT'),
                        help='Size of cropped images (default: 256 256)')
-    parser.add_argument('--num-variations', type=int, default=3,
+    parser.add_argument('--num-variations', type=int, default=10,
                        help='Number of variations per object (default: 10)')
     parser.add_argument('--center-jitter', type=float, default=0.05,
                        help='Center position jitter ratio (default: 0.05 = ±5%%)')

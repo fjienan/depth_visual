@@ -54,7 +54,7 @@ K4AROS2Device::K4AROS2Device()
   this->declare_parameter<std::string>("depth_mode", "NFOV_UNBINNED");
   this->declare_parameter<bool>("color_enabled", true);
   std::string pColorFormat = this->declare_parameter<std::string>("color_format", "bgra");
-  this->declare_parameter<std::string>("color_resolution", "1536P");
+  this->declare_parameter<std::string>("color_resolution", "720P");
   this->declare_parameter<int>("fps", 30);
   this->declare_parameter<bool>("point_cloud", false);
   this->declare_parameter<bool>("rgb_point_cloud", false);
