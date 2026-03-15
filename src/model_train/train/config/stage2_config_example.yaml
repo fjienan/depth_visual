@@ -12,7 +12,7 @@ model:
 data:
   # Stage 2 数据配置文件路径
   # 注意: 这个数据应该是由 prepare_stage2_data.py 生成的
-  config: "./config/data_2.yaml"
+  config: "./data_2.yaml"
   
   # 输入图像尺寸（通常比Stage 1小，因为已经裁剪过了）
   imgsz: 256

@@ -1,6 +1,6 @@
 # 1. 数据集根目录 (Root Path)
 # 它可以是绝对路径，也可以是相对于运行目录的相对路径
-path: /home/fjienan/Desktop/workspace/depth_visual/ws/src/model_train/database/KFS-1_obb_augmented_split
+path: /home/fjienan/Desktop/workspace/depth_visual/src/model_train/database/train_2025_3_13_augmented_split
 # 2. 数据划分 (Data Split)
 # 这里定义了训练集、验证集和测试集的图像路径
 # 数学视角：这是在定义样本空间 S = Train U Val U Test
@@ -9,11 +9,41 @@ val: images/val      # 验证图片
 test: images/test    # (可选) 测试图片
 
 # 3. 类别数量 (Number of Classes)
-# 这是一个标量，定义了分类空间的维度
-nc: 1
+# 当前标签使用原始编号（15~30），因此保持完整索引空间 0~30。
+nc: 31
 
 # 4. 类别名称 (Class Names)
 # 这是一个从整数索引集合 Z 到 语义字符串集合 S 的映射 (Mapping)
 # Index 0 -> 'plane', Index 1 -> 'ship'
 names:
-  0: 0
+  0: "0"
+  1: "1"
+  2: "2"
+  3: "3"
+  4: "4"
+  5: "5"
+  6: "6"
+  7: "7"
+  8: "8"
+  9: "9"
+  10: "10"
+  11: "11"
+  12: "12"
+  13: "13"
+  14: "14"
+  15: "15"
+  16: "16"
+  17: "17"
+  18: "18"
+  19: "19"
+  20: "20"
+  21: "21"
+  22: "22"
+  23: "23"
+  24: "24"
+  25: "25"
+  26: "26"
+  27: "27"
+  28: "28"
+  29: "29"
+  30: "30"

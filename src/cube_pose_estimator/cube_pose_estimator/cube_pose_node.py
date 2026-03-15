@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
+import threading
 import time
 from typing import List, Optional, Tuple
 
@@ -10,7 +11,7 @@ import cv2
 import numpy as np
 import rclpy
 from cv_bridge import CvBridge
-from geometry_msgs.msg import PolygonStamped, PoseStamped, TransformStamped
+from geometry_msgs.msg import Point, PolygonStamped, PoseStamped, TransformStamped
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from tf2_ros import TransformBroadcaster
@@ -30,6 +31,16 @@ class CubePoseEstimatorNode(Node):
         self._tf_broadcaster = TransformBroadcaster(self)
         self._cap: Optional[cv2.VideoCapture] = None
         self._timer = None
+        self._usb_capture_thread: Optional[threading.Thread] = None
+        self._usb_process_thread: Optional[threading.Thread] = None
+        self._usb_running = False
+        self._usb_lock = threading.Lock()
+        self._usb_new_frame_event = threading.Event()
+        self._latest_usb_frame: Optional[np.ndarray] = None
+        self._latest_usb_stamp = None
+        self._latest_usb_seq = 0
+        self._processed_usb_seq = 0
+        self._last_usb_read_fail_log_ts = 0.0
 
         self._declare_parameters()
         self._load_parameters()
@@ -266,8 +277,24 @@ class CubePoseEstimatorNode(Node):
         if self._usb_fps > 0:
             self._cap.set(cv2.CAP_PROP_FPS, float(self._usb_fps))
 
-        period = 1.0 / self._usb_fps if self._usb_fps > 0 else 1.0 / 30.0
-        self._timer = self.create_timer(period, self._on_usb_timer)
+        # Minimize driver buffering to reduce end-to-end latency (best-effort; backend-dependent).
+        try:
+            self._cap.set(cv2.CAP_PROP_BUFFERSIZE, 1.0)
+        except Exception:
+            pass
+
+        # Decouple capture and processing:
+        # - capture thread continuously grabs newest frame
+        # - process thread always processes latest frame, dropping stale queued frames
+        self._usb_running = True
+        self._usb_capture_thread = threading.Thread(
+            target=self._usb_capture_loop, name="usb_capture_loop", daemon=True
+        )
+        self._usb_process_thread = threading.Thread(
+            target=self._usb_process_loop, name="usb_process_loop", daemon=True
+        )
+        self._usb_capture_thread.start()
+        self._usb_process_thread.start()
         # Read back a few properties for observability (may return -1 if unsupported).
         try:
             ae = self._cap.get(cv2.CAP_PROP_AUTO_EXPOSURE)
@@ -283,17 +310,47 @@ class CubePoseEstimatorNode(Node):
             f"readback(auto_exposure={ae:.3g}, exposure={exp:.3g}, gain={gain:.3g})"
         )
 
-    def _on_usb_timer(self) -> None:
+    def _usb_capture_loop(self) -> None:
         if self._cap is None:
             return
-        ok, frame = self._cap.read()
-        if not ok or frame is None:
-            self.get_logger().warn("USB camera read failed.")
-            return
 
-        stamp = self.get_clock().now().to_msg()
-        # Process without ROS Image input
-        self._process_frame(frame, stamp)
+        while self._usb_running:
+            ok, frame = self._cap.read()
+            if not ok or frame is None:
+                now = time.perf_counter()
+                if now - self._last_usb_read_fail_log_ts >= 1.0:
+                    self._last_usb_read_fail_log_ts = now
+                    self.get_logger().warn("USB camera read failed.")
+                time.sleep(0.005)
+                continue
+
+            stamp = self.get_clock().now().to_msg()
+            with self._usb_lock:
+                self._latest_usb_frame = frame
+                self._latest_usb_stamp = stamp
+                self._latest_usb_seq += 1
+            self._usb_new_frame_event.set()
+
+    def _usb_process_loop(self) -> None:
+        while self._usb_running:
+            if not self._usb_new_frame_event.wait(timeout=0.1):
+                continue
+
+            # Drain to latest available frame; stale frames are skipped on purpose.
+            while self._usb_running:
+                with self._usb_lock:
+                    if (
+                        self._latest_usb_frame is None
+                        or self._latest_usb_stamp is None
+                        or self._latest_usb_seq == self._processed_usb_seq
+                    ):
+                        self._usb_new_frame_event.clear()
+                        break
+                    frame = self._latest_usb_frame.copy()
+                    stamp = self._latest_usb_stamp
+                    seq = self._latest_usb_seq
+                self._process_frame(frame, stamp)
+                self._processed_usb_seq = seq
 
     def _on_image(self, msg: Image) -> None:
         try:
@@ -423,8 +480,11 @@ class CubePoseEstimatorNode(Node):
             tf_msg.transform.rotation.w = float(quat_xyzw[3])
             self._tf_broadcaster.sendTransform(tf_msg)
 
-        if self._pub_corners_enabled:
+        corners_3d = None
+        if self._pub_corners_enabled or self._pub_markers_enabled:
             corners_3d = self._compute_face_corners_3d(pnp_res.rvec, pnp_res.tvec)
+
+        if self._pub_corners_enabled and corners_3d is not None:
             poly = PolygonStamped()
             poly.header.stamp = stamp_msg
             poly.header.frame_id = self._camera_frame
@@ -437,6 +497,7 @@ class CubePoseEstimatorNode(Node):
                 center_m=center_m,
                 quat_xyzw=quat_xyzw,
                 reproj_err=pnp_res.reprojection_error_px,
+                face_corners_3d=corners_3d,
             )
 
         if self._pub_vis_enabled:
@@ -542,6 +603,7 @@ class CubePoseEstimatorNode(Node):
         center_m: np.ndarray,
         quat_xyzw: np.ndarray,
         reproj_err: float,
+        face_corners_3d: Optional[List] = None,
     ) -> None:
         # Cube size in meters
         cube_size_m = float(self._cube_size_mm / 1000.0)
@@ -623,9 +685,43 @@ class CubePoseEstimatorNode(Node):
         )
         arr.markers.append(text)
 
+        # 4) Visible face contour marker (helps judge orientation/scale in 3D view).
+        if face_corners_3d is not None and len(face_corners_3d) == 4:
+            face = Marker()
+            face.header.stamp = stamp_msg
+            face.header.frame_id = self._camera_frame
+            face.ns = "cube_pose"
+            face.id = 4
+            face.type = Marker.LINE_STRIP
+            face.action = Marker.ADD
+            face.pose.orientation.w = 1.0
+            face.scale.x = 0.01
+            face.color.r = 1.0
+            face.color.g = 0.95
+            face.color.b = 0.2
+            face.color.a = 1.0
+
+            pts = list(face_corners_3d) + [face_corners_3d[0]]
+            for pt32 in pts:
+                pt = Point()
+                pt.x = float(pt32.x)
+                pt.y = float(pt32.y)
+                pt.z = float(pt32.z)
+                face.points.append(pt)
+            arr.markers.append(face)
+
         self._pub_markers.publish(arr)
 
     def destroy_node(self) -> bool:
+        self._usb_running = False
+        self._usb_new_frame_event.set()
+        if self._usb_capture_thread is not None:
+            self._usb_capture_thread.join(timeout=1.0)
+            self._usb_capture_thread = None
+        if self._usb_process_thread is not None:
+            self._usb_process_thread.join(timeout=1.0)
+            self._usb_process_thread = None
+
         if self._cap is not None:
             try:
                 self._cap.release()

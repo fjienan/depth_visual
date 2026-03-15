@@ -12,6 +12,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/config', ['config/cube_pose_estimator.yaml']),
         ('share/' + package_name + '/config', ['config/cube_pose_fusion.yaml']),
+        ('share/' + package_name + '/config', ['config/cube_pose_estimator.rviz']),
         ('share/' + package_name + '/launch', ['launch/cube_pose_estimator.launch.py']),
         ('share/' + package_name + '/launch', ['launch/cube_pose_estimator_with_fusion.launch.py']),
     ],

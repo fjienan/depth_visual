@@ -5,14 +5,14 @@
 model:
   # OBB 模型路径或名称
   # 可以是: yolov8n-obb.pt, yolov8s-obb.pt, yolov8m-obb.pt 等
-  path: "yolov8n-obb.pt"
+  path: "yolov8m-obb.pt"
   pretrained: true
 
 # ==================== 数据配置 ====================
 data:
   # 数据配置文件路径（YAML格式）
   # 应包含: train, val, test路径，类别数量(nc)，类别名称(names)
-  config: "./config/data_1.yaml"
+  config: "./data_1.yaml"
   
   # 输入图像尺寸
   imgsz: 640

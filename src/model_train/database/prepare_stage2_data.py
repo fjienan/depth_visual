@@ -179,6 +179,34 @@ class Stage2DataPreparator:
         ordered[3] = pts[np.argmax(diff)]   # bottom-left
         
         return ordered
+
+    def align_corners_with_keypoint1(self, ordered_corners: np.ndarray, keypoints: np.ndarray) -> np.ndarray:
+        """
+        Rotate ordered corners so destination top-left aligns with keypoint #1.
+
+        Input corners must already be in cyclic order [tl, tr, br, bl].
+        The function picks the corner closest to keypoint #1 as new start,
+        then keeps clockwise order. This effectively normalizes crop orientation
+        so keypoint #1 is placed at the top-left side after warping.
+
+        Args:
+            ordered_corners: Array of shape (4, 2), ordered cyclically
+            keypoints: Array of shape (N, 2) or (N, 3), keypoint #1 is index 0
+
+        Returns:
+            Rotated corners array of shape (4, 2)
+        """
+        if ordered_corners.shape != (4, 2):
+            raise ValueError(f"Expected ordered_corners shape (4,2), got {ordered_corners.shape}")
+        if keypoints.shape[0] < 1 or keypoints.shape[1] not in (2, 3):
+            raise ValueError(f"Expected keypoints shape (N,2|3), got {keypoints.shape}")
+
+        kp1_xy = keypoints[0, :2]
+        dists = np.sum((ordered_corners - kp1_xy) ** 2, axis=1)
+        start_idx = int(np.argmin(dists))
+
+        # Roll corners so the nearest corner to keypoint #1 becomes top-left.
+        return np.roll(ordered_corners, -start_idx, axis=0)
     
     def warp_image_and_keypoints(
         self,
@@ -398,11 +426,12 @@ class Stage2DataPreparator:
                 
                 # Order corners: [tl, tr, br, bl]
                 ordered_corners = self.order_points(obb_corners)
+                aligned_corners = self.align_corners_with_keypoint1(ordered_corners, kpts_image)
                 
                 # Warp image and transform keypoints
                 warped_img, transformed_kpts, M, valid = self.warp_image_and_keypoints(
                     image,
-                    ordered_corners,
+                    aligned_corners,
                     kpts_image,
                     self.crop_size
                 )

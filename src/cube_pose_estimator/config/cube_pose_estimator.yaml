@@ -4,12 +4,13 @@ cube_pose_estimator:
     # mode: "topic" (subscribe sensor_msgs/Image) or "usb" (cv2.VideoCapture)
     input:
       mode: "usb"
+    # 改成你的视频流话题，比如 /camera/image_raw
     image_topic: "/camera/color/image_raw"
 
     usb:
       camera_id: 2
       width: 1280
-      height: 720
+      height: 1024
       fps: 30.0
       backend: "any"   # any|v4l2 (Linux). If unsure, keep "any".
       # Camera controls (best-effort; depends on driver/camera)
@@ -33,8 +34,8 @@ cube_pose_estimator:
 
     # ===== YOLO (Ultralytics) cascade detector =====
     yolo:
-      obb_model_path: "/home/fjienan/Desktop/workspace/depth_visual/ws/src/model_train/output/stage1_obb_0/weights/best.pt"
-      pose_model_path: "/home/fjienan/Desktop/workspace/depth_visual/ws/src/model_train/output/stage2_pose_1/weights/best.pt"
+      obb_model_path: "/home/fjienan/Desktop/workspace/depth_visual/src/model_train/output/stage1_obb__train_augmented_split_n47596/weights/best.pt"
+      pose_model_path: "/home/fjienan/Desktop/workspace/depth_visual/src/model_train/train/output/stage2/weights/best.pt"
       conf_threshold: 0.25
       iou_threshold: 0.7
       device: "cuda"        # "cuda" or "cpu" or "0" (GPU id)

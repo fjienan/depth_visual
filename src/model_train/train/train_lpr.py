@@ -68,6 +68,15 @@ def _resolve_path_maybe_relative(path_str: str, base_dir: Path) -> Path:
     return (base_dir / p).resolve()
 
 
+def _resolve_project_dir(path_str: str) -> Path:
+    """
+    Resolve training output project dir relative to this script directory.
+
+    This makes `output.project` stable regardless of current working directory.
+    """
+    return _resolve_path_maybe_relative(path_str, Path(__file__).resolve().parent)
+
+
 def _count_images_in_dir(d: Path) -> int:
     if not d.exists() or not d.is_dir():
         return 0
@@ -190,7 +199,8 @@ def merge_configs(config: Dict[str, Any], args: argparse.Namespace, config_path:
     # 输出参数
     output_config = config.get('output', {})
     if args.project or output_config.get('project'):
-        trainer_args['project'] = args.project or output_config.get('project')
+        project_raw = str(args.project or output_config.get('project'))
+        trainer_args['project'] = str(_resolve_project_dir(project_raw))
     if args.name:
         trainer_args['name'] = args.name
     else:
@@ -255,8 +265,18 @@ def train_stage1_obb(config_path: str, args: argparse.Namespace):
     
     # 创建模型并训练
     try:
-        model = YOLO(trainer_args['model'])
-        trainer_args.pop('model')  # model参数已经在YOLO()中使用了
+        if args.resume:
+            resume_ckpt = str(Path(args.resume).expanduser().resolve())
+            if not Path(resume_ckpt).exists():
+                raise FileNotFoundError(f"resume checkpoint 不存在: {resume_ckpt}")
+            print(f"恢复训练: {resume_ckpt}")
+            model = YOLO(resume_ckpt)
+            trainer_args.pop('model', None)
+            # Ultralytics expects boolean resume flag once model is loaded from ckpt.
+            trainer_args['resume'] = True
+        else:
+            model = YOLO(trainer_args['model'])
+            trainer_args.pop('model')  # model参数已经在YOLO()中使用了
         
         # 开始训练
         results = model.train(**trainer_args)
@@ -301,8 +321,18 @@ def train_stage2_pose(config_path: str, args: argparse.Namespace):
     
     # 创建模型并训练
     try:
-        model = YOLO(trainer_args['model'])
-        trainer_args.pop('model')
+        if args.resume:
+            resume_ckpt = str(Path(args.resume).expanduser().resolve())
+            if not Path(resume_ckpt).exists():
+                raise FileNotFoundError(f"resume checkpoint 不存在: {resume_ckpt}")
+            print(f"恢复训练: {resume_ckpt}")
+            model = YOLO(resume_ckpt)
+            trainer_args.pop('model', None)
+            # Ultralytics expects boolean resume flag once model is loaded from ckpt.
+            trainer_args['resume'] = True
+        else:
+            model = YOLO(trainer_args['model'])
+            trainer_args.pop('model')
         
         # 开始训练
         results = model.train(**trainer_args)
