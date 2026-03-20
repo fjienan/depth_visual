@@ -3,6 +3,7 @@ import shutil
 import random
 import argparse
 from pathlib import Path
+from typing import Optional
 
 IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
 
@@ -15,8 +16,8 @@ def _list_images(images_dir: Path, recursive: bool = False):
 
 def split_dataset(
     images_dir: Path,
-    labels_dir: Path | None = None,
-    output_dir: Path | None = None,
+    labels_dir: Optional[Path] = None,
+    output_dir: Optional[Path] = None,
     train_ratio: float = 0.8,
     val_ratio: float = 0.1,
     test_ratio: float = 0.1,

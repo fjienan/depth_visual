@@ -8,7 +8,7 @@ cube_pose_estimator:
     image_topic: "/camera/color/image_raw"
 
     usb:
-      camera_id: 2
+      camera_id: 1
       width: 1280
       height: 1024
       fps: 30.0
@@ -34,12 +34,12 @@ cube_pose_estimator:
 
     # ===== YOLO (Ultralytics) cascade detector =====
     yolo:
-      obb_model_path: "/home/fjienan/Desktop/workspace/depth_visual/src/model_train/output/stage1_obb__train_augmented_split_n47596/weights/best.pt"
-      pose_model_path: "/home/fjienan/Desktop/workspace/depth_visual/src/model_train/train/output/stage2/weights/best.pt"
+      obb_model_path: "/home/ares/depth_visual/src/model_train/output/stage1_obb__train_2025_3_13_augmented_split_n42171/weights/best.pt"
+      pose_model_path: "/home/ares/depth_visual/src/model_train/output/stage2_pose__stage2_train_2025_3_13_augmented_split_origin_split_yolo11s/weights/best.pt"
       conf_threshold: 0.25
       iou_threshold: 0.7
       device: "cuda"        # "cuda" or "cpu" or "0" (GPU id)
-      pad_ratio: 1.2
+      pad_ratio: 1.4
       warp_size: [256, 256] # [width, height]
       # 推理分辨率（imgsz）
       # - 0 表示使用 Ultralytics 默认值

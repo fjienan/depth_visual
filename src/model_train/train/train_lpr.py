@@ -246,6 +246,11 @@ def train_stage1_obb(config_path: str, args: argparse.Namespace):
     config = load_config(config_path)
     trainer_args = merge_configs(config, args, config_path=config_path)
     
+    # ---- 兼容性修正（Ultralytics >=8.4.x） ----
+    # args.yaml 里可能保存了 multi_scale: 0.0/1.0，Ultralytics 现在要求 bool
+    if isinstance(trainer_args.get('multi_scale'), (int, float)):
+        trainer_args['multi_scale'] = bool(trainer_args['multi_scale'])
+
     # 检查必需参数
     if 'model' not in trainer_args:
         print("错误: 未指定模型路径")
@@ -302,6 +307,10 @@ def train_stage2_pose(config_path: str, args: argparse.Namespace):
     config = load_config(config_path)
     trainer_args = merge_configs(config, args, config_path=config_path)
     
+    # ---- 兼容性修正（Ultralytics >=8.4.x） ----
+    if isinstance(trainer_args.get('multi_scale'), (int, float)):
+        trainer_args['multi_scale'] = bool(trainer_args['multi_scale'])
+
     # 检查必需参数
     if 'model' not in trainer_args:
         print("错误: 未指定模型路径")

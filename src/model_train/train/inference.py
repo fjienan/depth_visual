@@ -472,7 +472,7 @@ def main():
                        help='Path to YOLOv8-Pose model (.pt file)')
     parser.add_argument('--source', type=str, required=True,
                        help='Input image path or camera index (0, 1, ...)')
-    parser.add_argument('--pad-ratio', type=float, default=1.2,
+    parser.add_argument('--pad-ratio', type=float, default=1.3,
                        help='Dilation ratio for OBB (default: 1.2)')
     parser.add_argument('--warp-size', type=str, default='256,256',
                        help='Warped image size as width,height (default: 256,256)')

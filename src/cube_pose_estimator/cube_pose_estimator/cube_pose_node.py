@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 from collections import deque
+import io
 import threading
 import time
 from typing import List, Optional, Tuple
+from contextlib import redirect_stderr, redirect_stdout
 
 import cv2
 import numpy as np
 import rclpy
-from cv_bridge import CvBridge
 from geometry_msgs.msg import Point, PolygonStamped, PoseStamped, TransformStamped
 from rclpy.node import Node
 from sensor_msgs.msg import Image
@@ -27,7 +28,7 @@ class CubePoseEstimatorNode(Node):
     def __init__(self) -> None:
         super().__init__("cube_pose_estimator")
 
-        self._bridge = CvBridge()
+        self._bridge = self._init_cv_bridge()
         self._tf_broadcaster = TransformBroadcaster(self)
         self._cap: Optional[cv2.VideoCapture] = None
         self._timer = None
@@ -69,6 +70,136 @@ class CubePoseEstimatorNode(Node):
             raise ValueError(f"Unsupported input.mode: {self._input_mode}")
 
         self.get_logger().info("cube_pose_estimator node started.")
+
+    def _init_cv_bridge(self):
+        """Best-effort cv_bridge init.
+
+        Priority:
+        1) Use cv_bridge whenever import/runtime is valid.
+        2) Fallback to pure numpy conversion otherwise.
+        """
+        try:
+            # Some incompatible binary extensions print noisy import errors to stderr/stdout.
+            # Redirect streams during import attempt so fallback path stays clean.
+            with redirect_stderr(io.StringIO()), redirect_stdout(io.StringIO()):
+                from cv_bridge import CvBridge  # Delayed import to avoid module import crash.
+
+            self.get_logger().info("Using cv_bridge for ROS Image conversion.")
+            return CvBridge()
+        except Exception as exc:
+            self.get_logger().warn(
+                "cv_bridge is unavailable/incompatible; using numpy conversion fallback: "
+                f"{exc}"
+            )
+            return None
+
+    def _imgmsg_to_bgr(self, msg: Image) -> np.ndarray:
+        if self._bridge is not None:
+            return self._bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+
+        h = int(msg.height)
+        w = int(msg.width)
+        step = int(msg.step)
+        enc = str(msg.encoding).lower()
+        if h <= 0 or w <= 0 or step <= 0:
+            raise ValueError(f"Invalid image metadata: h={h}, w={w}, step={step}, enc={enc}")
+
+        buf = np.frombuffer(msg.data, dtype=np.uint8)
+        if buf.size < h * step:
+            raise ValueError(f"Image buffer too small: {buf.size} < {h * step}")
+        rows = buf[: h * step].reshape(h, step)
+
+        if enc in ("bgr8", "8uc3"):
+            img = rows[:, : w * 3].reshape(h, w, 3)
+            return img.copy()
+        if enc == "rgb8":
+            rgb = rows[:, : w * 3].reshape(h, w, 3)
+            return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        if enc in ("mono8", "8uc1"):
+            gray = rows[:, :w].reshape(h, w)
+            return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+        if enc == "bgra8":
+            bgra = rows[:, : w * 4].reshape(h, w, 4)
+            return cv2.cvtColor(bgra, cv2.COLOR_BGRA2BGR)
+        if enc == "rgba8":
+            rgba = rows[:, : w * 4].reshape(h, w, 4)
+            return cv2.cvtColor(rgba, cv2.COLOR_RGBA2BGR)
+
+        raise ValueError(f"Unsupported image encoding without cv_bridge: {msg.encoding}")
+
+    @staticmethod
+    def _rotm_to_quat_xyzw(rotm: np.ndarray) -> np.ndarray:
+        """Convert 3x3 rotation matrix to quaternion [x,y,z,w]."""
+        tr = float(rotm[0, 0] + rotm[1, 1] + rotm[2, 2])
+        if tr > 0.0:
+            s = (tr + 1.0) ** 0.5 * 2.0
+            qw = 0.25 * s
+            qx = (float(rotm[2, 1]) - float(rotm[1, 2])) / s
+            qy = (float(rotm[0, 2]) - float(rotm[2, 0])) / s
+            qz = (float(rotm[1, 0]) - float(rotm[0, 1])) / s
+        elif float(rotm[0, 0]) > float(rotm[1, 1]) and float(rotm[0, 0]) > float(rotm[2, 2]):
+            s = (1.0 + float(rotm[0, 0]) - float(rotm[1, 1]) - float(rotm[2, 2])) ** 0.5 * 2.0
+            qw = (float(rotm[2, 1]) - float(rotm[1, 2])) / s
+            qx = 0.25 * s
+            qy = (float(rotm[0, 1]) + float(rotm[1, 0])) / s
+            qz = (float(rotm[0, 2]) + float(rotm[2, 0])) / s
+        elif float(rotm[1, 1]) > float(rotm[2, 2]):
+            s = (1.0 + float(rotm[1, 1]) - float(rotm[0, 0]) - float(rotm[2, 2])) ** 0.5 * 2.0
+            qw = (float(rotm[0, 2]) - float(rotm[2, 0])) / s
+            qx = (float(rotm[0, 1]) + float(rotm[1, 0])) / s
+            qy = 0.25 * s
+            qz = (float(rotm[1, 2]) + float(rotm[2, 1])) / s
+        else:
+            s = (1.0 + float(rotm[2, 2]) - float(rotm[0, 0]) - float(rotm[1, 1])) ** 0.5 * 2.0
+            qw = (float(rotm[1, 0]) - float(rotm[0, 1])) / s
+            qx = (float(rotm[0, 2]) + float(rotm[2, 0])) / s
+            qy = (float(rotm[1, 2]) + float(rotm[2, 1])) / s
+            qz = 0.25 * s
+        q = np.array([qx, qy, qz, qw], dtype=np.float64)
+        n = float(np.linalg.norm(q))
+        if n < 1e-12:
+            return np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float64)
+        return (q / n).astype(np.float64)
+
+    @staticmethod
+    def _optical_to_flu_vec(v_xyz: np.ndarray) -> np.ndarray:
+        """Convert vector from optical frame (x-right,y-down,z-forward) to FLU (x-forward,y-left,z-up)."""
+        v = v_xyz.reshape(3).astype(np.float64)
+        return np.array([v[2], -v[0], -v[1]], dtype=np.float64)
+
+    @staticmethod
+    def _optical_to_flu_rotm(rotm_optical: np.ndarray) -> np.ndarray:
+        """Convert rotation matrix expressed in optical camera frame into FLU camera frame."""
+        r_flu_opt = np.array(
+            [
+                [0.0, 0.0, 1.0],   # x_f = z_o
+                [-1.0, 0.0, 0.0],  # y_f = -x_o
+                [0.0, -1.0, 0.0],  # z_f = -y_o
+            ],
+            dtype=np.float64,
+        )
+        return (r_flu_opt @ rotm_optical.astype(np.float64)).astype(np.float64)
+
+    def _bgr_to_imgmsg(self, bgr: np.ndarray, stamp_msg) -> Image:
+        if self._bridge is not None:
+            out = self._bridge.cv2_to_imgmsg(bgr, encoding="bgr8")
+            out.header.stamp = stamp_msg
+            out.header.frame_id = self._camera_frame
+            return out
+
+        if bgr.ndim != 3 or bgr.shape[2] != 3:
+            raise ValueError(f"Expected bgr shape (H,W,3), got {bgr.shape}")
+        h, w = int(bgr.shape[0]), int(bgr.shape[1])
+        out = Image()
+        out.header.stamp = stamp_msg
+        out.header.frame_id = self._camera_frame
+        out.height = h
+        out.width = w
+        out.encoding = "bgr8"
+        out.is_bigendian = 0
+        out.step = w * 3
+        out.data = np.ascontiguousarray(bgr).tobytes()
+        return out
 
     def _declare_parameters(self) -> None:
         self.declare_parameter("input.mode", "topic")
@@ -354,9 +485,9 @@ class CubePoseEstimatorNode(Node):
 
     def _on_image(self, msg: Image) -> None:
         try:
-            bgr = self._bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+            bgr = self._imgmsg_to_bgr(msg)
         except Exception as exc:  # pragma: no cover
-            self.get_logger().error(f"cv_bridge conversion failed: {exc}")
+            self.get_logger().error(f"Image conversion failed: {exc}")
             return
 
         self._process_frame(bgr, msg.header.stamp)
@@ -450,8 +581,11 @@ class CubePoseEstimatorNode(Node):
                     f"cube_center_mm=({c[0]:.1f},{c[1]:.1f},{c[2]:.1f})"
                 )
 
-        quat_xyzw = self._pnp.rvec_tvec_to_pose(pnp_res.rvec, pnp_res.tvec)[1]
-        center_m = (pnp_res.cube_center_mm / 1000.0).astype(np.float64)
+        rotm_optical, _ = cv2.Rodrigues(pnp_res.rvec)
+        rotm_flu = self._optical_to_flu_rotm(rotm_optical)
+        quat_xyzw = self._rotm_to_quat_xyzw(rotm_flu)
+        center_m_optical = (pnp_res.cube_center_mm / 1000.0).astype(np.float64)
+        center_m = self._optical_to_flu_vec(center_m_optical)
 
         if self._pub_pose_enabled:
             pose_msg = PoseStamped()
@@ -529,10 +663,11 @@ class CubePoseEstimatorNode(Node):
 
         pts: List[Point32] = []
         for p in cam_pts:
+            p_flu = self._optical_to_flu_vec((p / 1000.0).astype(np.float64))
             pt = Point32()
-            pt.x = float(p[0] / 1000.0)
-            pt.y = float(p[1] / 1000.0)
-            pt.z = float(p[2] / 1000.0)
+            pt.x = float(p_flu[0])
+            pt.y = float(p_flu[1])
+            pt.z = float(p_flu[2])
             pts.append(pt)
         return pts
 
@@ -592,9 +727,7 @@ class CubePoseEstimatorNode(Node):
             cv2.putText(vis, text, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 1)
             y += 28
 
-        out = self._bridge.cv2_to_imgmsg(vis, encoding="bgr8")
-        out.header.stamp = stamp_msg
-        out.header.frame_id = self._camera_frame
+        out = self._bgr_to_imgmsg(vis, stamp_msg)
         self._pub_vis.publish(out)
 
     def _publish_markers(
