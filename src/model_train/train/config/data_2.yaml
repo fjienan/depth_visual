@@ -1,6 +1,6 @@
 # 1. 数据集根目录 (Root Path)
 # 它可以是绝对路径，也可以是相对于运行目录的相对路径
-path: /home/ares/depth_visual/src/model_train/database/stage2__train_2025_3_13_augmented_split_origin_split
+path: /home/ares/depth_visual/src/model_train/database/stage2__merged_bag_15_30_times_1_split
 # 2. 数据划分 (Data Split)
 # 这里定义了训练集、验证集和测试集的图像路径
 # 数学视角：这是在定义样本空间 S = Train U Val U Test

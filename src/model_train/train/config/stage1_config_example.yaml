@@ -47,7 +47,7 @@ data:
 # ==================== 训练参数 ====================
 training:
   # 训练轮数
-  epochs: 300
+  epochs: 500
   
   # 优化器
   optimizer: SGD

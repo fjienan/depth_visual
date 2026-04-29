@@ -19,6 +19,7 @@ import argparse
 import yaml
 import os
 import sys
+import re
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 
@@ -269,6 +270,7 @@ def train_stage1_obb(config_path: str, args: argparse.Namespace):
     print("="*60 + "\n")
     
     # 创建模型并训练
+    resume_ckpt = None
     try:
         if args.resume:
             resume_ckpt = str(Path(args.resume).expanduser().resolve())
@@ -284,7 +286,35 @@ def train_stage1_obb(config_path: str, args: argparse.Namespace):
             trainer_args.pop('model')  # model参数已经在YOLO()中使用了
         
         # 开始训练
-        results = model.train(**trainer_args)
+        try:
+            results = model.train(**trainer_args)
+        except AssertionError as e:
+            err = str(e)
+            if args.resume and resume_ckpt and "nothing to resume" in err:
+                print("\n检测到该 checkpoint 已完成原计划轮次，自动切换为'加载权重继续训练'模式（不使用 resume）。")
+                retry_args = dict(trainer_args)
+                retry_args.pop('resume', None)
+
+                finished_epochs = None
+                m = re.search(r"training to (\d+) epochs", err)
+                if m:
+                    try:
+                        finished_epochs = int(m.group(1))
+                    except ValueError:
+                        finished_epochs = None
+
+                # Ensure target epochs is greater than finished epochs.
+                current_epochs = retry_args.get('epochs')
+                if finished_epochs is not None and (
+                    current_epochs is None or int(current_epochs) <= finished_epochs
+                ):
+                    retry_args['epochs'] = finished_epochs + 100
+                    print(f"自动调整训练轮数为: {retry_args['epochs']}（需大于 {finished_epochs}）")
+
+                model = YOLO(resume_ckpt)
+                results = model.train(**retry_args)
+            else:
+                raise
         
         print(f"\n{colorstr('green', 'bold', '✓')} Stage 1 训练完成!")
         print(f"最佳模型保存在: {results.save_dir}/weights/best.pt")
@@ -329,6 +359,7 @@ def train_stage2_pose(config_path: str, args: argparse.Namespace):
     print("="*60 + "\n")
     
     # 创建模型并训练
+    resume_ckpt = None
     try:
         if args.resume:
             resume_ckpt = str(Path(args.resume).expanduser().resolve())
@@ -344,7 +375,35 @@ def train_stage2_pose(config_path: str, args: argparse.Namespace):
             trainer_args.pop('model')
         
         # 开始训练
-        results = model.train(**trainer_args)
+        try:
+            results = model.train(**trainer_args)
+        except AssertionError as e:
+            err = str(e)
+            if args.resume and resume_ckpt and "nothing to resume" in err:
+                print("\n检测到该 checkpoint 已完成原计划轮次，自动切换为'加载权重继续训练'模式（不使用 resume）。")
+                retry_args = dict(trainer_args)
+                retry_args.pop('resume', None)
+
+                finished_epochs = None
+                m = re.search(r"training to (\d+) epochs", err)
+                if m:
+                    try:
+                        finished_epochs = int(m.group(1))
+                    except ValueError:
+                        finished_epochs = None
+
+                # Ensure target epochs is greater than finished epochs.
+                current_epochs = retry_args.get('epochs')
+                if finished_epochs is not None and (
+                    current_epochs is None or int(current_epochs) <= finished_epochs
+                ):
+                    retry_args['epochs'] = finished_epochs + 100
+                    print(f"自动调整训练轮数为: {retry_args['epochs']}（需大于 {finished_epochs}）")
+
+                model = YOLO(resume_ckpt)
+                results = model.train(**retry_args)
+            else:
+                raise
         
         print(f"\n{colorstr('green', 'bold', '✓')} Stage 2 训练完成!")
         print(f"最佳模型保存在: {results.save_dir}/weights/best.pt")

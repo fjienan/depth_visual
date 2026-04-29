@@ -8,5 +8,5 @@ yolo**/
 rosbag**/
 **/output
 .vscode/
-**yolo**
 **.zip
+yolo**.pt
