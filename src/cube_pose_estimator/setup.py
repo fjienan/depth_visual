@@ -31,6 +31,7 @@ setup(
         'console_scripts': [
             'cube_pose_node = cube_pose_estimator.cube_pose_node:main',
             'pose_fusion_node = cube_pose_estimator.pose_fusion_node:main',
+            'kfs_align_controller_node = cube_pose_estimator.kfs_align_controller_node:main',
         ],
     },
 )
