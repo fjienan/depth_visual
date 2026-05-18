@@ -5,7 +5,7 @@
 model:
   # OBB 模型路径或名称
   # 可以是: yolov8n-obb.pt, yolov8s-obb.pt, yolov8m-obb.pt 等
-  path: "yolo26n-obb.pt"
+  path: "yolo11n-obb.pt"
   pretrained: true
 
 # ==================== 数据配置 ====================
@@ -22,6 +22,9 @@ data:
   
   # 工作进程数
   workers: 8
+
+  # 是否启用灰度单通道训练（数据集仍为RGB，训练时在线转灰度并把模型输入改为1通道）
+  grayscale: true
 
   # ==================== 数据增强 ====================
   augmentation:
@@ -73,7 +76,7 @@ training:
 # ==================== 输出配置 ====================
 output:
   project: "../output"
-  name: "stage1_obb"
+  name: "stage1_obb_grey"
   # 自动命名：按“数据集文件夹名 + 数据集规模”命名输出目录
   # 例：stage1_obb__KFS-1_obb_augmented_split_n2130
   auto_name: true

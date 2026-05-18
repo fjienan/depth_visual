@@ -42,6 +42,11 @@ class CubePoseEstimatorNode(Node):
         self._latest_usb_seq = 0
         self._processed_usb_seq = 0
         self._last_usb_read_fail_log_ts = 0.0
+        # ---- 新增：声明并获取灰度图参数 ----
+        self.declare_parameter('use_grayscale', False)
+        self.use_grayscale = self.get_parameter('use_grayscale').get_parameter_value().bool_value
+        self.get_logger().info(f"Use Grayscale mode: {self.use_grayscale}")
+        # ----------------------------------
 
         self._declare_parameters()
         self._load_parameters()
@@ -498,8 +503,16 @@ class CubePoseEstimatorNode(Node):
         self._last_ts = now
         if dt > 1e-6:
             self._fps = 0.9 * self._fps + 0.1 * (1.0 / dt)
+        
+        # ---- 核心修改：根据参数决定是否转换成灰度图传给检测器 ----
+        if self.use_grayscale:
+            detector_input = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+        else:
+            detector_input = bgr
 
-        corners_xy = self._detector.detect_face_corners(bgr)
+        corners_xy = self._detector.detect_face_corners(detector_input)
+        # ------------------------------------------------------
+
         if corners_xy is None:
             if self._pub_vis_enabled:
                 self._publish_vis(bgr, stamp_msg)
@@ -680,7 +693,12 @@ class CubePoseEstimatorNode(Node):
         tvec: np.ndarray | None = None,
         reproj_err: float | None = None,
     ) -> None:
-        vis = bgr.copy()
+        # ---- 核心修改：如果开启灰度，把底图做成黑白背景（但保持3通道以渲染彩色线条） ----
+        if self.use_grayscale:
+            gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+            vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR) # 变成3通道的黑白图
+        else:
+            vis = bgr.copy() # 原本的彩色底图
 
         if corners_xy is not None and corners_xy.shape == (4, 2):
             pts = corners_xy.astype(np.int32)

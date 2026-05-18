@@ -89,12 +89,12 @@ class YoloCascadeDetector:
         if image_gray is None:
             return None
 
-        # --- 处理灰度图输入并转换为 YOLO 兼容的 3 通道 ---
-        if image_gray.ndim == 2:  # 标准灰度图 (H, W)
+        # --- 核心修改：处理灰度图输入并转换为 YOLO 兼容的 3 通道 ---
+        if image_gray.ndim == 2:  # 标准灰度图，形状为 (H, W)
             image_bgr = np.stack([image_gray] * 3, axis=-1)
-        elif image_gray.ndim == 3 and image_gray.shape[2] == 1:  # (H, W, 1) 的灰度图
+        elif image_gray.ndim == 3 and image_gray.shape[2] == 1:  # 形状为 (H, W, 1) 的灰度图
             image_bgr = np.tile(image_gray, (1, 1, 3))
-        elif image_gray.ndim == 3 and image_gray.shape[2] == 3:  # 兼容原本的 BGR 彩色图
+        elif image_gray.ndim == 3 and image_gray.shape[2] == 3:  # 兼容传入的已经是 3 通道图
             image_bgr = image_gray
         else:
             return None
@@ -149,4 +149,5 @@ class YoloCascadeDetector:
                 return None
             return kpts_img.astype(np.float32)
         except Exception:
+            # 保持节点运行时稳定；调用者将 None 视为检测失败
             return None

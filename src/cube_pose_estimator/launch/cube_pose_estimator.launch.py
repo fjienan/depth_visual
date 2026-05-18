@@ -24,6 +24,9 @@ def generate_launch_description() -> LaunchDescription:
     params_file = LaunchConfiguration("params_file")
     rviz = LaunchConfiguration("rviz")
     rviz_config = LaunchConfiguration("rviz_config")
+    
+    # 1. 声明接收命令行输入的变量
+    use_grayscale = LaunchConfiguration("use_grayscale")
 
     return LaunchDescription(
         [
@@ -42,12 +45,22 @@ def generate_launch_description() -> LaunchDescription:
                 default_value=default_rviz,
                 description="Path to an RViz2 config file.",
             ),
+            # 2. 注册命令行参数名，默认值设为字符串 "false"
+            DeclareLaunchArgument(
+                "use_grayscale",
+                default_value="false",
+                description="Whether to capture/process images in grayscale mode.",
+            ),
             Node(
                 package="cube_pose_estimator",
                 executable="cube_pose_node",
                 name="cube_pose_estimator",
                 output="screen",
-                parameters=[params_file],
+                # 3. 把 YAML 的参数文件和刚才新增的开关参数一起打包扔给 Node
+                parameters=[
+                    params_file,
+                    {"use_grayscale": use_grayscale}
+                ],
             ),
             Node(
                 package="rviz2",
@@ -59,4 +72,3 @@ def generate_launch_description() -> LaunchDescription:
             ),
         ]
     )
-

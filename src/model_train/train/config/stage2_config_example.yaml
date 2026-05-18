@@ -5,7 +5,7 @@
 model:
   # Pose 模型路径或名称
   # 可以是: yolov8n-pose.pt, yolov8s-pose.pt, yolov8m-pose.pt 等
-  path: "yolo26m-pose.pt"
+  path: "yolo11m-pose.pt"
   pretrained: true
 
 # ==================== 数据配置 ====================
@@ -22,6 +22,9 @@ data:
   
   # 工作进程数
   workers: 8
+
+  # 是否启用灰度单通道训练（数据集仍为RGB，训练时在线转灰度并把模型输入改为1通道）
+  grayscale: true
 
   # ==================== 数据增强（加强以防止过拟合）====================
   augmentation:
@@ -98,7 +101,7 @@ loss:
 # ==================== 输出配置 ====================
 output:
   project: "../output"
-  name: "stage2_pose"
+  name: "stage2_pose_grey"
   # 自动命名：按“数据集文件夹名 + 数据集规模”命名输出目录
   # 例：stage2_pose__stage2__KFS-1_obb_split_n5400
   auto_name: true

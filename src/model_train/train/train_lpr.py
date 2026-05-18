@@ -23,6 +23,9 @@ import re
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 
+# Added for grayscale patching and model adaption
+import importlib
+
 try:
     from ultralytics import YOLO
     from ultralytics.utils import LOGGER, colorstr
@@ -30,6 +33,130 @@ except ImportError:
     print("错误: 请先安装 ultralytics 库")
     print("安装命令: pip install ultralytics")
     sys.exit(1)
+
+
+# ------------------------------
+# Grayscale (1-channel) training helpers
+# ------------------------------
+
+def _get_cfg(data: Dict[str, Any], keys, default=None):
+    cur = data
+    for k in keys:
+        if not isinstance(cur, dict) or k not in cur:
+            return default
+        cur = cur[k]
+    return cur
+
+
+def _enable_ultralytics_grayscale_dataloader() -> None:
+    """Monkey-patch Ultralytics dataset image loading to return 1-channel grayscale arrays.
+
+    This keeps the dataset on disk as RGB but converts in-memory during training.
+    """
+    try:
+        # Ultralytics 8.4.x typically uses ultralytics.data.base.BaseDataset.load_image
+        base = importlib.import_module("ultralytics.data.base")
+        BaseDataset = getattr(base, "BaseDataset")
+    except Exception as e:
+        raise RuntimeError(f"无法导入 Ultralytics 数据集模块以启用灰度训练: {e}")
+
+    if getattr(BaseDataset, "__kfs_gray_patched__", False):
+        return
+
+    orig_load_image = BaseDataset.load_image
+
+    def load_image_gray(self, i, rect_mode=False):  # type: ignore[override]
+        import cv2
+        im, f, fn = orig_load_image(self, i, rect_mode=rect_mode)
+        # im is typically BGR uint8 (H,W,3)
+        if im is None:
+            return im, f, fn
+        if im.ndim == 3 and im.shape[2] == 3:
+            im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+            im = im[:, :, None]  # (H,W,1)
+        return im, f, fn
+
+    BaseDataset.load_image = load_image_gray  # type: ignore[assignment]
+    BaseDataset.__kfs_gray_patched__ = True
+
+
+def _adapt_first_conv_in_channels_to_1(model) -> None:
+    """Try to adapt the model's first Conv2d from 3->1 channels, preserving weights."""
+    import torch
+    import torch.nn as nn
+
+    # Ultralytics YOLO object exposes torch model as .model
+    net = getattr(model, "model", None)
+    if net is None:
+        return
+
+    first_conv = None
+    for m in net.modules():
+        if isinstance(m, nn.Conv2d):
+            first_conv = m
+            break
+
+    if first_conv is None:
+        return
+
+    if int(first_conv.in_channels) == 1:
+        return
+
+    if int(first_conv.in_channels) != 3:
+        raise RuntimeError(f"首层卷积 in_channels={first_conv.in_channels}，不是 3，无法自动改为 1")
+
+    new_conv = nn.Conv2d(
+        in_channels=1,
+        out_channels=first_conv.out_channels,
+        kernel_size=first_conv.kernel_size,
+        stride=first_conv.stride,
+        padding=first_conv.padding,
+        dilation=first_conv.dilation,
+        groups=first_conv.groups,
+        bias=(first_conv.bias is not None),
+        padding_mode=first_conv.padding_mode,
+    )
+
+    with torch.no_grad():
+        # Convert (out,3,kh,kw) -> (out,1,kh,kw) by averaging channels
+        new_w = first_conv.weight.mean(dim=1, keepdim=True)
+        new_conv.weight.copy_(new_w)
+        if first_conv.bias is not None and new_conv.bias is not None:
+            new_conv.bias.copy_(first_conv.bias)
+
+    # Replace the conv in its parent
+    def _replace_child(parent: nn.Module, child: nn.Module, new_child: nn.Module) -> bool:
+        for name, module in parent.named_children():
+            if module is child:
+                setattr(parent, name, new_child)
+                return True
+            if _replace_child(module, child, new_child):
+                return True
+        return False
+
+    replaced = _replace_child(net, first_conv, new_conv)
+    if not replaced:
+        raise RuntimeError("未能替换首层 Conv2d（Ultralytics 模型结构不匹配）")
+
+
+def _maybe_enable_grayscale_training(stage_config: Dict[str, Any]) -> bool:
+    """Enable grayscale pipeline if config requests it. Returns True if enabled."""
+    gray = bool(_get_cfg(stage_config, ["data", "grayscale"], False))
+    if not gray:
+        return False
+
+    # 1) Make dataloader produce grayscale images
+    _enable_ultralytics_grayscale_dataloader()
+
+    # 2) Disable color augmentations (HSV) for grayscale
+    aug = stage_config.get("data", {}).get("augmentation", {})
+    if isinstance(aug, dict):
+        # Force to 0.0 (don't use setdefault; user values would otherwise override)
+        aug["hsv_h"] = 0.0
+        aug["hsv_s"] = 0.0
+        aug["hsv_v"] = 0.0
+
+    return True
 
 
 def load_config(config_path: str) -> Dict[str, Any]:
@@ -130,7 +257,7 @@ def _infer_dataset_name_and_size_from_data_yaml(data_yaml_path: Path) -> Tuple[s
 def merge_configs(config: Dict[str, Any], args: argparse.Namespace, config_path: str) -> Dict[str, Any]:
     """合并配置文件和命令行参数"""
     trainer_args = {}
-    
+
     # 模型参数
     if args.model or config.get('model', {}).get('path'):
         trainer_args['model'] = args.model or config.get('model', {}).get('path')
@@ -174,7 +301,9 @@ def merge_configs(config: Dict[str, Any], args: argparse.Namespace, config_path:
             'mixup': aug_config.get('mixup', 0.0),
             'copy_paste': aug_config.get('copy_paste', 0.0),
         })
-    
+
+    # NOTE: do not pass unsupported args like 'channels' into Ultralytics trainer.
+
     # 训练参数
     if args.epochs is not None:
         trainer_args['epochs'] = args.epochs
@@ -245,6 +374,7 @@ def train_stage1_obb(config_path: str, args: argparse.Namespace):
     
     # 加载配置
     config = load_config(config_path)
+    _maybe_enable_grayscale_training(config)
     trainer_args = merge_configs(config, args, config_path=config_path)
     
     # ---- 兼容性修正（Ultralytics >=8.4.x） ----
@@ -278,11 +408,16 @@ def train_stage1_obb(config_path: str, args: argparse.Namespace):
                 raise FileNotFoundError(f"resume checkpoint 不存在: {resume_ckpt}")
             print(f"恢复训练: {resume_ckpt}")
             model = YOLO(resume_ckpt)
+            # If grayscale enabled, adapt model input channels
+            if bool(_get_cfg(config, ["data", "grayscale"], False)):
+                _adapt_first_conv_in_channels_to_1(model)
             trainer_args.pop('model', None)
             # Ultralytics expects boolean resume flag once model is loaded from ckpt.
             trainer_args['resume'] = True
         else:
             model = YOLO(trainer_args['model'])
+            if bool(_get_cfg(config, ["data", "grayscale"], False)):
+                _adapt_first_conv_in_channels_to_1(model)
             trainer_args.pop('model')  # model参数已经在YOLO()中使用了
         
         # 开始训练
@@ -335,6 +470,7 @@ def train_stage2_pose(config_path: str, args: argparse.Namespace):
     
     # 加载配置
     config = load_config(config_path)
+    _maybe_enable_grayscale_training(config)
     trainer_args = merge_configs(config, args, config_path=config_path)
     
     # ---- 兼容性修正（Ultralytics >=8.4.x） ----
@@ -367,11 +503,15 @@ def train_stage2_pose(config_path: str, args: argparse.Namespace):
                 raise FileNotFoundError(f"resume checkpoint 不存在: {resume_ckpt}")
             print(f"恢复训练: {resume_ckpt}")
             model = YOLO(resume_ckpt)
+            if bool(_get_cfg(config, ["data", "grayscale"], False)):
+                _adapt_first_conv_in_channels_to_1(model)
             trainer_args.pop('model', None)
             # Ultralytics expects boolean resume flag once model is loaded from ckpt.
             trainer_args['resume'] = True
         else:
             model = YOLO(trainer_args['model'])
+            if bool(_get_cfg(config, ["data", "grayscale"], False)):
+                _adapt_first_conv_in_channels_to_1(model)
             trainer_args.pop('model')
         
         # 开始训练

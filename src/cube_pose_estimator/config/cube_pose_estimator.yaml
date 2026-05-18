@@ -8,7 +8,7 @@ cube_pose_estimator:
     image_topic: "/camera/color/image_raw"
 
     usb:
-      camera_id: 0
+      camera_id: 1
       width: 128
       height: 1024
       fps: 30.0
@@ -17,16 +17,17 @@ cube_pose_estimator:
       auto_exposure: false
       exposure: -2.0   # only used when auto_exposure=false; units are backend-dependent
       gain: -1.0       # optional; set >=0 to request a gain value
+      use_grayscale: false
 
     # ===== Camera intrinsics (OpenCV pinhole) =====
     camera:
       intrinsics:
-        fx: 807.3
-        fy: 807.2
-        cx: 640.6
-        cy: 345.5
+        fx: 611.803
+        fy: 611.758
+        cx: 637.162
+        cy: 369.382
       # OpenCV distortion coefficients: [k1, k2, p1, p2, k3]
-      distortion: [-0.055048, 0.126640, -0.000524, 0.001130, -0.107551]
+      distortion: [0.0, 0.0, 0.0, 0.0, 0.0]
 
     # ===== Target geometry =====
     target:
@@ -34,8 +35,8 @@ cube_pose_estimator:
 
     # ===== YOLO (Ultralytics) cascade detector =====
     yolo:
-      obb_model_path: "/home/ares/depth_visual/src/model_train/output/stage1_obb__train_2025_3_13_augmented_split_n42171/weights/best.pt"
-      pose_model_path: "/home/ares/depth_visual/src/model_train/output/stage2_pose__stage2_train_2025_3_13_augmented_split_origin_split_yolo11s/weights/best.pt"
+      obb_model_path: "/home/ares/depth_visual/src/model_train/output/stage1_obb_grey__stage1_gray_dataset_n23440/weights/best.pt"
+      pose_model_path: "/home/ares/depth_visual/src/model_train/output/stage2_pose_grey__stage2_gray_dataset_n37555/weights/best.pt"
       conf_threshold: 0.25
       iou_threshold: 0.7
       device: "cuda"        # "cuda" or "cpu" or "0" (GPU id)
